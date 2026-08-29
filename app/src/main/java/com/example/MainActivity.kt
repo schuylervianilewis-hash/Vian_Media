@@ -1,0 +1,406 @@
+package com.example
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.example.ui.navigation.AppNavigation
+import com.example.ui.screens.LoggerScreen
+import com.example.ui.theme.MyApplicationTheme
+
+class MainActivity : ComponentActivity() {
+
+  override fun onUserLeaveHint() {
+      super.onUserLeaveHint()
+      if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+          val player = com.example.service.PlayerManager.exoPlayer
+          if (player != null && player.isPlaying) {
+              val vs = player.videoSize
+              val rot = vs.unappliedRotationDegrees
+              @Suppress("DEPRECATION")
+              val width = if (rot % 180 == 0) vs.width else vs.height
+              @Suppress("DEPRECATION")
+              val height = if (rot % 180 == 0) vs.height else vs.width
+              try {
+                  enterPictureInPictureMode(com.example.ui.screens.PipHelper.buildPipParams(this, player, width, height))
+              } catch (e: Exception) {
+                  LogKeeper.logError("MainActivity", "Error entering PiP on user leave hint: ${e.message}", e)
+              }
+          }
+      }
+  }
+
+  override fun onDestroy() {
+      super.onDestroy()
+      try {
+          requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+      } catch (e: Exception) {}
+      try {
+          unregisterReceiver(pipReceiver)
+      } catch (e: Exception) {}
+  }
+
+  override fun finish() {
+      try {
+          requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+      } catch (e: Exception) {}
+      super.finish()
+  }
+
+  private val pipReceiver = object : android.content.BroadcastReceiver() {
+      override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
+          if (intent?.action == "com.example.ACTION_ENTER_PIP") {
+              if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                  enterPictureInPictureMode(com.example.ui.screens.PipHelper.buildPipParams(this@MainActivity, com.example.service.PlayerManager.exoPlayer))
+              }
+          }
+      }
+  }
+
+  private val _currentIntent = kotlinx.coroutines.flow.MutableStateFlow<android.content.Intent?>(null)
+
+  private fun persistUriPermissions(intent: android.content.Intent?) {
+      if (intent == null) return
+      val uris = mutableListOf<android.net.Uri>()
+      intent.data?.let { uris.add(it) }
+      (intent.getParcelableExtra<android.os.Parcelable>(android.content.Intent.EXTRA_STREAM) as? android.net.Uri)?.let {
+          uris.add(it)
+      }
+      val clipData = intent.clipData
+      if (clipData != null && clipData.itemCount > 0) {
+          for (i in 0 until clipData.itemCount) {
+              clipData.getItemAt(i)?.uri?.let { uris.add(it) }
+          }
+      }
+      val arrayList = intent.getParcelableArrayListExtra<android.os.Parcelable>(android.content.Intent.EXTRA_STREAM)
+      if (arrayList != null) {
+          for (parcel in arrayList) {
+              (parcel as? android.net.Uri)?.let { uris.add(it) }
+          }
+      }
+      for (uri in uris) {
+          if (uri.scheme == "content") {
+              try {
+                  val flags = intent.flags and (android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                  if (flags != 0) {
+                      contentResolver.takePersistableUriPermission(uri, flags)
+                  }
+              } catch (e: Exception) {}
+          }
+      }
+  }
+
+  private fun handlePopupOrMiniIntent(intent: android.content.Intent?): Boolean {
+      if (intent == null) return false
+      val className = intent.component?.className ?: ""
+      val isMini = className.contains("MiniMediaActivity")
+      val isPip = className.contains("PipMediaActivity")
+      if (!isMini && !isPip) return false
+
+      val uris = mutableListOf<String>()
+      intent.data?.let { uris.add(it.toString()) }
+      if (uris.isEmpty()) {
+          (intent.getParcelableExtra<android.os.Parcelable>(android.content.Intent.EXTRA_STREAM) as? android.net.Uri)?.let {
+              uris.add(it.toString())
+          }
+      }
+      if (uris.isEmpty()) {
+          val clipData = intent.clipData
+          if (clipData != null && clipData.itemCount > 0) {
+              for (i in 0 until clipData.itemCount) {
+                  clipData.getItemAt(i)?.uri?.let { uris.add(it.toString()) }
+              }
+          }
+      }
+      if (uris.isEmpty()) {
+          val arrayList = intent.getParcelableArrayListExtra<android.os.Parcelable>(android.content.Intent.EXTRA_STREAM)
+          if (arrayList != null) {
+              for (parcel in arrayList) {
+                  (parcel as? android.net.Uri)?.let { uris.add(it.toString()) }
+              }
+          }
+      }
+
+      if (uris.isEmpty()) return false
+
+      com.example.LogKeeper.log("handlePopupOrMiniIntent: isMini=$isMini, isPip=$isPip, urisCount=${uris.size}", "MainActivity")
+
+      if (isMini) {
+          val mediaItems = uris.map { uriStr ->
+              val uri = android.net.Uri.parse(uriStr)
+              val name = com.example.ui.screens.getDisplayNameFromUri(this, uri)
+              androidx.media3.common.MediaItem.Builder()
+                  .setUri(uri)
+                  .setMediaId(uriStr)
+                  .setMediaMetadata(
+                      androidx.media3.common.MediaMetadata.Builder()
+                          .setTitle(name)
+                          .build()
+                  )
+                  .build()
+          }
+
+          com.example.service.PlayerManager.initialize(this, false)
+          val player = com.example.service.PlayerManager.exoPlayer
+          player?.setMediaItems(mediaItems)
+          player?.prepare()
+          player?.play()
+
+          if (android.provider.Settings.canDrawOverlays(this)) {
+              val serviceIntent = android.content.Intent(this, com.example.service.PlaybackService::class.java).apply {
+                  putExtra("command", "ACTION_MINIPLAYER")
+              }
+              if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                  startForegroundService(serviceIntent)
+              } else {
+                  startService(serviceIntent)
+              }
+
+              val overlayIntent = android.content.Intent("com.example.ACTION_WIDGET_COMMAND").apply {
+                  putExtra("command", "ACTION_MINIPLAYER")
+                  setPackage(packageName)
+              }
+              sendBroadcast(overlayIntent)
+
+              finish()
+              return true
+          } else {
+              val permIntent = android.content.Intent(
+                  android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                  android.net.Uri.parse("package:$packageName")
+              ).apply {
+                  addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+              }
+              startActivity(permIntent)
+              android.widget.Toast.makeText(
+                  this,
+                  "Please enable 'Display over other apps' to use Mini Player",
+                  android.widget.Toast.LENGTH_LONG
+              ).show()
+              finish()
+              return true
+          }
+      } else if (isPip) {
+          val targetUriStr = uris.first()
+          val targetUri = android.net.Uri.parse(targetUriStr)
+          val displayName = com.example.ui.screens.getDisplayNameFromUri(this, targetUri)
+
+          if (android.provider.Settings.canDrawOverlays(this)) {
+              val mediaItem = androidx.media3.common.MediaItem.Builder()
+                  .setUri(targetUri)
+                  .setMediaId(targetUriStr)
+                  .setMediaMetadata(
+                      androidx.media3.common.MediaMetadata.Builder()
+                          .setTitle(displayName)
+                          .build()
+                  )
+                  .build()
+
+              com.example.service.PlayerManager.initialize(this, false)
+              val player = com.example.service.PlayerManager.exoPlayer
+              player?.setMediaItem(mediaItem)
+              player?.prepare()
+              player?.play()
+
+              val serviceIntent = android.content.Intent(this, com.example.service.PlaybackService::class.java).apply {
+                  putExtra("command", "ACTION_VIDEO_OVERLAY")
+              }
+              if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                  startForegroundService(serviceIntent)
+              } else {
+                  startService(serviceIntent)
+              }
+
+              val overlayIntent = android.content.Intent("com.example.ACTION_WIDGET_COMMAND").apply {
+                  putExtra("command", "ACTION_VIDEO_OVERLAY")
+                  setPackage(packageName)
+              }
+              sendBroadcast(overlayIntent)
+
+              finish()
+              return true
+          } else {
+              val permIntent = android.content.Intent(
+                  android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                  android.net.Uri.parse("package:$packageName")
+              ).apply {
+                  addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+              }
+              startActivity(permIntent)
+              android.widget.Toast.makeText(
+                  this,
+                  "Please enable 'Display over other apps' to use Popup Play",
+                  android.widget.Toast.LENGTH_LONG
+              ).show()
+              finish()
+              return true
+          }
+      }
+      return false
+  }
+
+  override fun onNewIntent(intent: android.content.Intent) {
+      super.onNewIntent(intent)
+      setIntent(intent)
+      persistUriPermissions(intent)
+      if (handlePopupOrMiniIntent(intent)) {
+          return
+      }
+      _currentIntent.value = intent
+  }
+
+  override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    persistUriPermissions(intent)
+    if (handlePopupOrMiniIntent(intent)) {
+        return
+    }
+    val filter = android.content.IntentFilter("com.example.ACTION_ENTER_PIP")
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+        registerReceiver(pipReceiver, filter, android.content.Context.RECEIVER_NOT_EXPORTED)
+    } else {
+        registerReceiver(pipReceiver, filter)
+    }
+    
+    coil.Coil.setImageLoader(
+        coil.ImageLoader.Builder(this)
+            .components {
+                add(com.example.VideoThumbnailFetcher.Factory())
+            }
+            .memoryCache {
+                coil.memory.MemoryCache.Builder(this)
+                    .maxSizePercent(0.15)
+                    .build()
+            }
+            .diskCache {
+                coil.disk.DiskCache.Builder()
+                    .directory(this.cacheDir.resolve("thumbnail_cache"))
+                    .maxSizeBytes(100L * 1024 * 1024) // 100 MB max
+                    .build()
+            }
+            .crossfade(true)
+            .build()
+    )
+
+    LogKeeper.init(this)
+    enableEdgeToEdge(
+        statusBarStyle = androidx.activity.SystemBarStyle.light(
+            android.graphics.Color.TRANSPARENT,
+            android.graphics.Color.TRANSPARENT
+        ),
+        navigationBarStyle = androidx.activity.SystemBarStyle.light(
+            android.graphics.Color.TRANSPARENT,
+            android.graphics.Color.TRANSPARENT
+        )
+    )
+    _currentIntent.value = intent
+    if (intent?.action == "com.example.ACTION_START_PIP") {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            enterPictureInPictureMode(com.example.ui.screens.PipHelper.buildPipParams(this@MainActivity, com.example.service.PlayerManager.exoPlayer))
+        }
+    }
+    
+    setContent {
+      val currentIntent by _currentIntent.collectAsState()
+      val settings = com.example.data.SettingsManager.getInstance(this)
+      val themePref by settings.themePreference.collectAsState()
+      val fontPref by settings.fontPreference.collectAsState()
+      com.example.service.PlayerManager.initialize(this, false)
+      MyApplicationTheme(themePreference = themePref, fontPreference = fontPref) {
+        var isLoggerOpen by remember { mutableStateOf(false) }
+
+        if (isLoggerOpen) {
+          LoggerScreen(onClose = { isLoggerOpen = false })
+        } else {
+          Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+            Box(modifier = Modifier.fillMaxSize()) {
+              var initialUris: List<String> = emptyList()
+              if (currentIntent?.action == "com.example.ACTION_OPEN_PLAYER") {
+                  val currentMediaId = com.example.service.PlayerManager.exoPlayer?.currentMediaItem?.mediaId
+                  if (currentMediaId != null) {
+                      initialUris = listOf(currentMediaId)
+                  }
+              } else if (currentIntent?.action == android.content.Intent.ACTION_VIEW || currentIntent?.action == "edit") {
+                val uris = mutableListOf<String>()
+                currentIntent?.data?.let { uri ->
+                  uris.add(uri.toString())
+                }
+                if (uris.isEmpty()) {
+                  (currentIntent?.getParcelableExtra<android.os.Parcelable>(android.content.Intent.EXTRA_STREAM) as? android.net.Uri)?.let { uri ->
+                    uris.add(uri.toString())
+                  }
+                }
+                if (uris.isEmpty()) {
+                    val clipData = currentIntent?.clipData
+                    if (clipData != null && clipData.itemCount > 0) {
+                        clipData.getItemAt(0)?.uri?.let { uri ->
+                            uris.add(uri.toString())
+                        }
+                    }
+                }
+                initialUris = uris
+              } else if (currentIntent?.action == android.content.Intent.ACTION_SEND) {
+                (currentIntent?.getParcelableExtra<android.os.Parcelable>(android.content.Intent.EXTRA_STREAM) as? android.net.Uri)?.let { uri ->
+                  initialUris = listOf(uri.toString())
+                }
+              } else if (currentIntent?.action == android.content.Intent.ACTION_SEND_MULTIPLE) {
+                val arrayList = currentIntent?.getParcelableArrayListExtra<android.os.Parcelable>(android.content.Intent.EXTRA_STREAM)
+                if (arrayList != null) {
+                    val uris = mutableListOf<String>()
+                    for (parcel in arrayList) {
+                        (parcel as? android.net.Uri)?.let { uris.add(it.toString()) }
+                    }
+                    initialUris = uris
+                }
+              }
+              
+              val forceAction = currentIntent?.component?.className?.let { className ->
+                  if (className.contains("PlayMediaActivity")) "play"
+                  else if (className.contains("EditMediaActivity")) "edit"
+                  else null
+              } ?: currentIntent?.action
+
+              AppNavigation(initialUris = initialUris, forceAction = forceAction)
+              
+              // Global Diagnostic FAB
+              val logEnabled by LogKeeper.isEnabled.collectAsState()
+              val settingsManager = remember { com.example.data.SettingsManager.getInstance(applicationContext) }
+              val showLoggerFab by settingsManager.showLoggerFab.collectAsState()
+              
+              if (showLoggerFab) {
+                  FloatingActionButton(
+                    onClick = { isLoggerOpen = true },
+                    modifier = Modifier
+                      .align(Alignment.BottomStart)
+                      .padding(innerPadding)
+                      .padding(16.dp),
+                    containerColor = if (logEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                  ) {
+                    Icon(Icons.Filled.BugReport, contentDescription = "Open Logger")
+                  }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
