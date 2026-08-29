@@ -72,3 +72,15 @@
 * Verification: local build only
 * Deviation: None
 * Known issues: None
+
+* Timestamp: 2026-08-29T21:08:00Z
+* Summary: Updated GitHub Actions workflow with gradle/actions/setup-gradle@v4 pinning Gradle 8.11.1 and disabling wrapper validation for CI APK builds.
+* Files touched:
+  - .github/workflows/build.yml
+  - receipts/RECEIPTS_026.md
+* What was actually done:
+  - Configured `gradle/actions/setup-gradle@v4` with `gradle-version: '8.11.1'` and `validate-wrappers: false`.
+  - Configured build command to `gradle assembleDebug --stacktrace` targeting `app-debug.apk` artifact upload.
+* Verification: local build only
+* Deviation: None
+* Known issues: None
