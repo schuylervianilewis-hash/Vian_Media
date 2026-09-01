@@ -1,5 +1,15 @@
-2026-08-06T14:31:00Z
-- Requested: User issued "Implement" to apply support for editing `.m4s` (fragmented MP4) files.
-- Touched: app/src/main/java/com/example/ui/screens/VideoEditorScreen.kt, app/src/main/java/com/example/data/MediaRepository.kt, app/src/main/java/com/example/ui/navigation/AppNavigation.kt
-- Action: Implemented an interactive FFmpeg repair workflow in the Video Editor. Since ExoPlayer fails to load raw `.m4s` segments due to missing `moov` init atoms, added an `onPlayerError` listener that displays an "Unsupported Format" repair prompt. This transcodes the raw segments into a proper `.mp4` file seamlessly. Added `m4s`, `m3u8`, and `ts` to the recognized video extensions in `MediaRepository` and `AppNavigation`.
-- Verification: local build only
+- Timestamp: 2026-07-25T15:07
+- Summary: Fixed MiniPlayer expand intent and navigation bar visibility during playback.
+- Files: 
+  - MiniPlayerOverlay.kt
+  - PlayerScreen.kt
+- Actions:
+  - In `MiniPlayerOverlay.kt`, changed the expand button click handler to call `onMinimize()` instead of `onClose()`. `onClose()` was destroying the `PlayerManager` state, while `onMinimize()` properly hides the overlay and leaves the player active so `MainActivity` can resume it.
+  - In `PlayerScreen.kt`, changed `insetsController.hide(Type.navigationBars())` to instead only hide/show `Type.systemBars()`, ensuring the bottom navigation bar is correctly shown whenever the user brings up the player controls.
+- Verification: Compiled via gradle assembleDebug.
+- 2026-07-30T09:50:00Z
+- "Playing video in player is sometimes playing landscape videos in portrait... When I opened a video in Library it opened nornally it shows video in portrait. Even though video is landscape. When I go back and play same video again then it is proper landscape."
+- app/src/main/java/com/example/ui/screens/PlayerScreen.kt
+- Fixed a race condition where `PlayerScreen` was synchronously applying the `videoSize` of the PREVIOUSLY played video in the singleton `ExoPlayer` before the new video was prepared. This caused the screen to incorrectly lock to portrait initially if the previous video was portrait (or default), and then ignore the subsequent landscape request from `onVideoSizeChanged`. Added a check to verify that `controller.currentMediaItem?.localConfiguration?.uri` matches the newly requested video URI before synchronously setting orientation.
+- Also re-implemented `unappliedRotationDegrees` (using `effectiveWidth` and `effectiveHeight`) to correctly identify landscape videos shot on phone sensors that encode as portrait but have 90/270 degree rotation metadata.
+- Built locally successfully.

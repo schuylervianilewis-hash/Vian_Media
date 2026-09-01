@@ -1,5 +1,10 @@
-2026-08-07T12:15:00Z
-- Requested: User asked to discuss creating a lightweight floating window video player as a substitute for PiP, since PiP isn't working on their phone. Instructed to "just discuss no coding".
-- Touched: None
-- Action: Discussed the conceptual architecture for a floating window video player using SYSTEM_ALERT_WINDOW, comparing it to the existing mini player and detailing the layout structure and controls. No code changes were made.
-- Verification: not tested (discussion only)
+- Timestamp: 2026-07-26T03:25
+- Summary: Implemented Vian Permissions Manager on the Settings page.
+- Files: 
+  - PermissionsManagerScreen.kt (new)
+  - SettingsScreen.kt
+- Actions:
+  - Created `PermissionsManagerScreen` which displays toggles for Media Storage, Notifications, and System Overlay (PiP/Mini Player).
+  - Added folded descriptions explaining which features use these permissions (e.g. Media Player, Background Playback, Mini Player Overlay).
+  - Integrated the new screen as a dialog opened from a new "Vian Permissions Manager" button in `SettingsScreen`.
+- Verification: Syntax checking.

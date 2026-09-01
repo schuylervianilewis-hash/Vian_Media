@@ -142,21 +142,24 @@ fun FloatingVideoPlayerOverlay(
                                 modifier = Modifier
                                     .align(Alignment.BottomCenter)
                                     .fillMaxWidth()
-                                    .padding(bottom = 40.dp)
+                                    .padding(horizontal = 4.dp, vertical = 2.dp)
                             ) {
                                 com.example.ui.screens.PlaybackProgressRow(
                                     mediaController = player,
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
                                 )
                                 
-                                Box(
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    // Center alignment
+                                    // Left/Center Playback controls
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
-                                        modifier = Modifier.align(Alignment.Center)
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.Start),
+                                        modifier = Modifier.weight(1f)
                                     ) {
                                         IconButton(
                                             onClick = { 
@@ -168,13 +171,13 @@ fun FloatingVideoPlayerOverlay(
                                                     }
                                                 }
                                             },
-                                            modifier = Modifier.size(56.dp)
+                                            modifier = Modifier.size(32.dp)
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Filled.SkipPrevious,
                                                 contentDescription = "Previous",
                                                 tint = Color.White,
-                                                modifier = Modifier.size(36.dp)
+                                                modifier = Modifier.size(20.dp)
                                             )
                                         }
 
@@ -192,13 +195,13 @@ fun FloatingVideoPlayerOverlay(
                                                     }
                                                 }
                                             },
-                                            modifier = Modifier.size(56.dp)
+                                            modifier = Modifier.size(32.dp)
                                         ) {
                                             Icon(
                                                 imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                                                 contentDescription = "Play/Pause",
                                                 tint = Color.White,
-                                                modifier = Modifier.size(36.dp)
+                                                modifier = Modifier.size(22.dp)
                                             )
                                         }
                                         
@@ -210,15 +213,30 @@ fun FloatingVideoPlayerOverlay(
                                                     }
                                                 }
                                             },
-                                            modifier = Modifier.size(56.dp)
+                                            modifier = Modifier.size(32.dp)
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Filled.SkipNext,
                                                 contentDescription = "Next",
                                                 tint = Color.White,
-                                                modifier = Modifier.size(36.dp)
+                                                modifier = Modifier.size(20.dp)
                                             )
                                         }
+                                    }
+
+                                    // Right Action buttons (Close, Minimize, and placeholder space for corner Resize)
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.End)
+                                    ) {
+                                        IconButton(onClick = onMinimize, modifier = Modifier.size(32.dp)) {
+                                            Icon(Icons.Filled.Remove, "Minimize", tint = Color.White, modifier = Modifier.size(18.dp))
+                                        }
+                                        IconButton(onClick = onClose, modifier = Modifier.size(32.dp)) {
+                                            Icon(Icons.Filled.Close, "Close completely", tint = Color.White, modifier = Modifier.size(18.dp))
+                                        }
+                                        // Reserve 32dp spacing so buttons do not overlap sticky corner resize handle
+                                        Spacer(modifier = Modifier.width(32.dp))
                                     }
                                 }
                             }
@@ -228,34 +246,25 @@ fun FloatingVideoPlayerOverlay(
             }
         }
 
-        // Floating Close, Minimize, and Resize buttons at bottom right
-        Row(
+        // Sticky Corner Resize handle strictly positioned at BottomEnd
+        Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(8.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f), RoundedCornerShape(16.dp)),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically
+                .size(32.dp)
+                .pointerInput(Unit) {
+                    detectDragGestures { change, dragAmount ->
+                        change.consume()
+                        onResize(dragAmount.x, dragAmount.y)
+                    }
+                },
+            contentAlignment = Alignment.Center
         ) {
-            IconButton(onClick = onClose, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Filled.Close, "Close completely", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
-            }
-            IconButton(onClick = onMinimize, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Filled.Remove, "Minimize", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
-            }
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .pointerInput(Unit) {
-                        detectDragGestures { change, dragAmount ->
-                            change.consume()
-                            onResize(dragAmount.x, dragAmount.y)
-                        }
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Filled.ZoomOutMap, "Resize", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
-            }
+            Icon(
+                Icons.Filled.ZoomOutMap,
+                "Resize",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }

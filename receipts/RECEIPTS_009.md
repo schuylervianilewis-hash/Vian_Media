@@ -1,5 +1,14 @@
-2026-08-07T12:51:10Z
-- Requested: User issued "Connect this to pip button in player also" to replace native PiP with the floating video player.
-- Touched: app/src/main/java/com/example/ui/screens/PlayerScreen.kt, app/src/main/java/com/example/service/PlaybackService.kt, app/src/main/java/com/example/ui/components/FloatingVideoPlayerOverlay.kt
-- Action: Modified `showOverlay` in `PlaybackService` to accept a boolean `startInVideoMode` flag which defaults to false. Mapped `ACTION_VIDEO_OVERLAY` widget command to launch `showOverlay(true)`. Replaced the native Android `enterPictureInPictureMode` logic in the `PlayerScreen`'s PiP button with sending `ACTION_VIDEO_OVERLAY` and closing the main activity, making the app rely solely on the custom floating video player overlay. Corrected missing imports in `FloatingVideoPlayerOverlay.kt`.
-- Verification: local build only
+- Timestamp: 2026-07-26T14:18
+- Summary: Styled Mini Player to be predominantly white and fixed drag-and-drop animation conflict. Added Temp Current playlist functionality.
+- Files: 
+  - MiniPlayerOverlay.kt
+  - PlayerScreen.kt
+  - PlaylistDetailScreen.kt
+- Actions:
+  - Mini Player: Shrunk folded floating button to 40.dp.
+  - Mini Player: Changed expanded background to white. Updated icons, top bar, and progress slider colors to blue (0xFF2196F3) to match Library styling.
+  - Playlist: When `PlayerScreen` receives a multi-item queue, it now persists a "Temp Current" playlist in the Room database.
+  - Playlist: When the Mini Player is closed, the "Temp Current" playlist is deleted.
+  - Playlist Detail: Added a "Save As" action button in the `TopAppBar` specifically when viewing the "Temp Current" playlist, allowing the user to rename and keep it.
+  - Drag and Drop: Removed `Modifier.animateItem()` from `PlaylistDetailScreen` which was conflicting with the manual `translationY` animation. This restores the smooth visual displacement of other items without causing layout jumping.
+- Verification: Compiled and verified locally.

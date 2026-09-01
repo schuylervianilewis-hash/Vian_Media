@@ -270,6 +270,7 @@ fun PlayerScreen(
     var abRepeatEnd by remember { mutableStateOf<Long?>(null) }
     var sleepTimerEndTime by remember { mutableStateOf<Long?>(null) }
     var showSleepTimerDialog by remember { mutableStateOf(false) }
+    var lastKnownIsPortrait by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<Boolean?>(null) }
     
     var scale by remember { mutableFloatStateOf(1f) }
     var offsetX by remember { mutableFloatStateOf(0f) }
@@ -281,6 +282,9 @@ fun PlayerScreen(
     val playerViewRef = remember { mutableStateOf<PlayerView?>(null) }
     androidx.activity.compose.BackHandler {
         com.example.LogKeeper.log("BackHandler triggered in PlayerScreen (bgPlay=${backgroundPlayEnabledRef.value})", "PlayerScreen")
+        try {
+            context.findActivity()?.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        } catch (e: Exception) {}
         mediaController?.let { controller ->
             val pos = controller.currentPosition
             val dur = controller.duration
@@ -579,7 +583,10 @@ fun PlayerScreen(
         mediaController = com.example.service.PlayerManager.exoPlayer
         
         // Start the service for MediaSession features
-        val intent = android.content.Intent(context, com.example.service.PlaybackService::class.java)
+        val intent = android.content.Intent(context, com.example.service.PlaybackService::class.java).apply {
+            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            data = decodedUri
+        }
         try {
             context.startService(intent)
         } catch(e: Exception) {}
@@ -590,28 +597,43 @@ fun PlayerScreen(
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
             try {
                 val retriever = android.media.MediaMetadataRetriever()
-                retriever.setDataSource(context, android.net.Uri.parse(decodedUriString))
-                val widthStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
-                val heightStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
-                val rotationStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)
-                retriever.release()
-                if (widthStr != null && heightStr != null) {
-                    var w = widthStr.toIntOrNull() ?: 0
-                    var h = heightStr.toIntOrNull() ?: 0
-                    val rot = rotationStr?.toIntOrNull() ?: 0
-                    if (rot == 90 || rot == 270) {
-                        val temp = w
-                        w = h
-                        h = temp
-                    }
-                    if (w > 0 && h > 0) {
-                        val isVideoPortrait = h > w
-                        com.example.LogKeeper.log("Lightweight check: rot=$rot w=$w h=$h isPortrait=$isVideoPortrait", "PlayerScreen")
-                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                            context.findActivity()?.requestedOrientation = if (isVideoPortrait) {
-                                android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
-                            } else {
-                                android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                val u = android.net.Uri.parse(decodedUriString)
+                var set = false
+                try {
+                    retriever.setDataSource(context, u)
+                    set = true
+                } catch (e1: Exception) {
+                    try {
+                        context.contentResolver.openFileDescriptor(u, "r")?.use { pfd ->
+                            retriever.setDataSource(pfd.fileDescriptor)
+                            set = true
+                        }
+                    } catch (e2: Exception) {}
+                }
+                if (set) {
+                    val widthStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
+                    val heightStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
+                    val rotationStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)
+                    retriever.release()
+                    if (widthStr != null && heightStr != null) {
+                        var w = widthStr.toIntOrNull() ?: 0
+                        var h = heightStr.toIntOrNull() ?: 0
+                        val rot = rotationStr?.toIntOrNull() ?: 0
+                        if (rot == 90 || rot == 270) {
+                            val temp = w
+                            w = h
+                            h = temp
+                        }
+                        if (w > 0 && h > 0) {
+                            val isVideoPortrait = h > w
+                            lastKnownIsPortrait = isVideoPortrait
+                            com.example.LogKeeper.log("Lightweight check: rot=$rot w=$w h=$h isPortrait=$isVideoPortrait", "PlayerScreen")
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                context.findActivity()?.requestedOrientation = if (isVideoPortrait) {
+                                    android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                                } else {
+                                    android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                                }
                             }
                         }
                     }
@@ -630,14 +652,18 @@ fun PlayerScreen(
         
 
         fun updateOrientation(videoSize: androidx.media3.common.VideoSize) {
+            val act = context.findActivity()
+            if (act == null || act.isFinishing || act.isDestroyed) return
+            if (controller.currentMediaItem == null || controller.playbackState == androidx.media3.common.Player.STATE_IDLE || controller.playbackState == androidx.media3.common.Player.STATE_ENDED) return
             if (videoSize.width > 0 && videoSize.height > 0) {
                 @Suppress("DEPRECATION")
                 val w = if (videoSize.unappliedRotationDegrees % 180 == 0) videoSize.width else videoSize.height
                 @Suppress("DEPRECATION")
                 val h = if (videoSize.unappliedRotationDegrees % 180 == 0) videoSize.height else videoSize.width
                 val isPortrait = h > w
+                lastKnownIsPortrait = isPortrait
                 com.example.LogKeeper.log("updateOrientation called with videoSize: ${videoSize.width}x${videoSize.height} rot=${videoSize.unappliedRotationDegrees}. isPortrait=$isPortrait", "PlayerScreen")
-                context.findActivity()?.requestedOrientation = if (isPortrait) {
+                act.requestedOrientation = if (isPortrait) {
                     android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
                 } else {
                     android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
@@ -880,13 +906,54 @@ fun PlayerScreen(
                 }
             } else if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
                 currentController?.let { controller ->
-                    // No need to prepare() explicitly since we are not stopping the player.
+                    // Re-apply orientation if known
+                    lastKnownIsPortrait?.let { isPortrait ->
+                        context.findActivity()?.requestedOrientation = if (isPortrait) {
+                            android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                        } else {
+                            android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                        }
+                    }
+
+                    // Check if playerView lost its player or needs re-binding
+                    try {
+                        if (playerViewRef.value?.player == null) {
+                            playerViewRef.value?.player = controller
+                        }
+                    } catch (e: Exception) {}
+
+                    // Check if controller was idle / errored or timeline cleared during lock
+                    if (controller.playbackState == androidx.media3.common.Player.STATE_IDLE || controller.mediaItemCount == 0 || controller.currentMediaItem == null) {
+                        com.example.LogKeeper.log("PlayerScreen ON_RESUME: Controller is in STATE_IDLE or empty, re-preparing media item for $decodedUriString", "PlayerScreen")
+                        val mediaMetadataBuilder = androidx.media3.common.MediaMetadata.Builder()
+                        val fileName = currentMediaTitle.ifEmpty { decodedUri.lastPathSegment ?: "Media" }
+                        mediaMetadataBuilder.setTitle(fileName)
+                        mediaMetadataBuilder.setDisplayTitle(fileName)
+                        mediaMetadataBuilder.setArtworkUri(decodedUri)
+
+                        val initialMediaItem = MediaItem.Builder()
+                            .setUri(decodedUri)
+                            .setMediaId(decodedUri.toString())
+                            .setMediaMetadata(mediaMetadataBuilder.build())
+                            .build()
+
+                        controller.setMediaItem(initialMediaItem)
+                        controller.prepare()
+
+                        val savedPos = com.example.data.SettingsManager.getInstance(context).getPlaybackPosition(decodedUriString, fileName)
+                        if (savedPos > 0) {
+                            controller.seekTo(savedPos)
+                        }
+                    }
                 }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         
         onDispose {
+            try {
+                context.findActivity()?.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            } catch (e: Exception) {}
             lifecycleOwner.lifecycle.removeObserver(observer)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 context.findActivity()?.setPictureInPictureParams(
@@ -896,9 +963,6 @@ fun PlayerScreen(
                 )
             }
             currentController?.let { controller ->
-                try { playerViewRef.value?.player = null } catch (e: Exception) {}
-                try { controller.clearVideoSurface() } catch (e: Exception) {}
-                hoistedMainListener?.let { controller.removeListener(it) }
                 val currentPos = controller.currentPosition
                 val dur = controller.duration
                 if (currentPos > 0L) {
@@ -1626,10 +1690,15 @@ fun PlayerScreen(
                             .windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.systemBarsIgnoringVisibility.union(androidx.compose.foundation.layout.WindowInsets.displayCutout).only(androidx.compose.foundation.layout.WindowInsetsSides.Horizontal + androidx.compose.foundation.layout.WindowInsetsSides.Bottom))
                             .padding(bottom = 4.dp)
                     ) {
+                        val savedState = remember(decodedUriString) {
+                            com.example.data.SettingsManager.getInstance(context).getPlaybackState(decodedUriString)
+                        }
                         com.example.ui.screens.PlaybackProgressRow(
                             mediaController = mediaController,
                             abRepeatStart = abRepeatStart,
                             abRepeatEnd = abRepeatEnd,
+                            fallbackDuration = savedState?.duration?.takeIf { it > 0L },
+                            fallbackPosition = savedState?.position?.takeIf { it > 0L },
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
                         )
                         

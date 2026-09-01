@@ -1,5 +1,10 @@
-2026-08-08T01:06:00Z
-- Requested: Ensure all visual changes made in individual tool modes (trim/cut, captions, etc.) carry over to the main editor preview seamlessly.
-- Touched: app/src/main/java/com/example/ui/screens/VideoEditorScreen.kt
-- Action: Implemented `MediaItem.ClippingConfiguration` directly in ExoPlayer when the user is in the main preview (`currentTool != VideoEditorTool.TRIM`). This ensures cuts and double-trims play seamlessly in the main preview without manual jumping, while preserving full-timeline scrubbing inside the TRIM tool. Added a `Text` overlay element above the ExoPlayer to ensure the Captions feature visually displays on the main preview exactly as it will render during export. Restricted the manual polling loop `seekTo` skipping logic strictly to the TRIM tool to avoid conflicts with native ExoPlayer clipping.
-- Verification: local build only
+- Timestamp: 2026-07-27T05:25
+- Summary: Fixed pinkish tint in Mini Player by making backgrounds opaque and matching Library theme.
+- Files: 
+  - MiniPlayerOverlay.kt
+- Actions:
+  - Removed `.copy(alpha = 0.95f)` from the Mini Player container background. The previous semi-transparency caused underlying content (e.g., video frames) to bleed through, creating a pinkish hue.
+  - Set the Mini Player container background to `MaterialTheme.colorScheme.background` (light grayish-blue) to perfectly match the main Library background, fulfilling the request for "slight blue color of app Library".
+  - Retained the `surface` (white) background for the top bar, matching the Library's `TopAppBar`.
+  - Removed alpha transparency from the bottom-right floating controls (`surfaceVariant`) to ensure absolute opacity and no color bleeding.
+- Verification: Compiled and verified locally.

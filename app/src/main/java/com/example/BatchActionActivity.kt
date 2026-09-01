@@ -122,10 +122,16 @@ class BatchActionActivity : ComponentActivity() {
                             },
                             confirmButton = {
                                 TextButton(onClick = {
-                                    val stopIntent = Intent(this@BatchActionActivity, com.example.service.FFmpegService::class.java).apply {
+                                    val stopIntent1 = Intent(this@BatchActionActivity, com.example.service.CompressionService::class.java).apply {
                                         action = "STOP"
                                     }
-                                    startService(stopIntent)
+                                    try { startService(stopIntent1) } catch (e: Exception) {}
+                                    val stopIntent2 = Intent(this@BatchActionActivity, com.example.service.FFmpegService::class.java).apply {
+                                        action = "STOP"
+                                    }
+                                    try { startService(stopIntent2) } catch (e: Exception) {}
+                                    CompressionStatus.isRunning = false
+                                    FFmpegStatus.isRunning = false
                                     finish()
                                 }) {
                                     Text("Cancel")
@@ -171,6 +177,20 @@ class BatchActionActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (isFinishing) {
+            val stopIntent1 = Intent(this, com.example.service.CompressionService::class.java).apply {
+                action = "STOP"
+            }
+            try { startService(stopIntent1) } catch (e: Exception) {}
+            val stopIntent2 = Intent(this, com.example.service.FFmpegService::class.java).apply {
+                action = "STOP"
+            }
+            try { startService(stopIntent2) } catch (e: Exception) {}
         }
     }
 }

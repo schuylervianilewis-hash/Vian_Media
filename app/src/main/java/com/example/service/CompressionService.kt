@@ -27,6 +27,16 @@ object CompressionStatus {
     var isRunning by mutableStateOf(false)
     var totalFiles by mutableStateOf(0)
     var currentFile by mutableStateOf(0)
+
+    fun stop(context: Context) {
+        isRunning = false
+        val intent = Intent(context, CompressionService::class.java).apply {
+            action = "STOP"
+        }
+        try {
+            context.startService(intent)
+        } catch (e: Exception) {}
+    }
 }
 
 class CompressionService : Service() {
@@ -45,8 +55,18 @@ class CompressionService : Service() {
         val action = intent?.action
         if (action == "STOP") {
             isCancelled = true
+            serviceJob.cancel()
             CompressionStatus.isRunning = false
-            stopForeground(true)
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                } else {
+                    @Suppress("DEPRECATION")
+                    stopForeground(true)
+                }
+                val nm = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+                nm?.cancel(1)
+            } catch (e: Exception) {}
             stopSelf()
             return START_NOT_STICKY
         }
@@ -111,7 +131,10 @@ class CompressionService : Service() {
 
         var count = 0
         for (uriStr in uris) {
-            if (isCancelled) break
+            if (isCancelled || !serviceJob.isActive) {
+                LogKeeper.log("Batch compression cancelled/interrupted - halting loop.", "Compressor")
+                break
+            }
             var sourceBitmap: Bitmap? = null
             var outBitmap: Bitmap? = null
             try {
@@ -134,9 +157,13 @@ class CompressionService : Service() {
                     options.inJustDecodeBounds = false
                 }
 
+                if (isCancelled || !serviceJob.isActive) break
+
                 contentResolver.openInputStream(uri)?.use { stream ->
                     sourceBitmap = BitmapFactory.decodeStream(stream, null, options)
                 }
+
+                if (isCancelled || !serviceJob.isActive) break
 
                 if (sourceBitmap != null) {
                     val bitmap = sourceBitmap!!
@@ -172,6 +199,11 @@ class CompressionService : Service() {
                         outStream.close()
                     }
                 }
+            } catch (oom: OutOfMemoryError) {
+                LogKeeper.logError("CompressionService", "OOM error compressing $uriStr", oom)
+                System.gc()
+                isCancelled = true
+                break
             } catch (e: Exception) {
                 LogKeeper.logError("CompressionService", "Failed to compress $uriStr", e)
             } finally {
@@ -182,6 +214,7 @@ class CompressionService : Service() {
                     sourceBitmap?.recycle()
                 }
             }
+            if (isCancelled || !serviceJob.isActive) break
             count++
             val notification = NotificationCompat.Builder(this@CompressionService, CHANNEL_ID)
                 .setContentTitle("Compressing Images")
@@ -253,6 +286,8 @@ class CompressionService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        isCancelled = true
+        CompressionStatus.isRunning = false
         serviceJob.cancel()
     }
 }

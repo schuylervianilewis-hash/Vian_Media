@@ -35,19 +35,38 @@ fun PlaybackProgressRow(
     mediaController: androidx.media3.common.Player?,
     abRepeatStart: Long? = null,
     abRepeatEnd: Long? = null,
+    fallbackDuration: Long? = null,
+    fallbackPosition: Long? = null,
     modifier: Modifier = Modifier
 ) {
-    var currentPosition by remember { mutableLongStateOf(0L) }
-    var duration by remember { mutableLongStateOf(0L) }
+    var currentPosition by remember { mutableLongStateOf(fallbackPosition?.takeIf { it > 0L } ?: 0L) }
+    var duration by remember { mutableLongStateOf(fallbackDuration?.takeIf { it > 0L } ?: 0L) }
     var showRemainingTime by remember { mutableStateOf(false) }
     var isScrubbing by remember { mutableStateOf(false) }
     var scrubPosition by remember { mutableStateOf(0f) }
 
+    LaunchedEffect(fallbackDuration, fallbackPosition) {
+        if (duration <= 0L && fallbackDuration != null && fallbackDuration > 0L) {
+            duration = fallbackDuration
+        }
+        if (currentPosition <= 0L && fallbackPosition != null && fallbackPosition > 0L) {
+            currentPosition = fallbackPosition
+        }
+    }
+
     LaunchedEffect(mediaController) {
         while (true) {
             if (mediaController != null && !isScrubbing) {
-                currentPosition = mediaController.currentPosition.coerceAtLeast(0L)
-                duration = mediaController.duration.coerceAtLeast(1L)
+                val dur = mediaController.duration
+                if (dur > 0L && dur != androidx.media3.common.C.TIME_UNSET) {
+                    duration = dur
+                }
+                val pos = mediaController.currentPosition
+                if (pos > 0L) {
+                    currentPosition = pos
+                } else if (pos == 0L && duration > 0L && currentPosition == 0L) {
+                    currentPosition = 0L
+                }
             }
             delay(500)
         }
