@@ -19,3 +19,4 @@
 - [x] Popup player lowered compact seekbar and unified bottom control row with sticky corner resize handle
 - [x] Activity exit & back navigation orientation reset (preventing launcher crash on external playback return)
 - [x] GitHub Actions APK pipeline configuration and Gradle lint error suppression (abortOnError=false)
+- [x] Gradle wrapper pinning to 8.11.1 and compileSdk/targetSdk stabilization to API 35
