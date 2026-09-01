@@ -50,18 +50,8 @@ class MainActivity : ComponentActivity() {
   override fun onDestroy() {
       super.onDestroy()
       try {
-          requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-      } catch (e: Exception) {}
-      try {
           unregisterReceiver(pipReceiver)
       } catch (e: Exception) {}
-  }
-
-  override fun finish() {
-      try {
-          requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-      } catch (e: Exception) {}
-      super.finish()
   }
 
   private val pipReceiver = object : android.content.BroadcastReceiver() {
@@ -75,37 +65,6 @@ class MainActivity : ComponentActivity() {
   }
 
   private val _currentIntent = kotlinx.coroutines.flow.MutableStateFlow<android.content.Intent?>(null)
-
-  private fun persistUriPermissions(intent: android.content.Intent?) {
-      if (intent == null) return
-      val uris = mutableListOf<android.net.Uri>()
-      intent.data?.let { uris.add(it) }
-      (intent.getParcelableExtra<android.os.Parcelable>(android.content.Intent.EXTRA_STREAM) as? android.net.Uri)?.let {
-          uris.add(it)
-      }
-      val clipData = intent.clipData
-      if (clipData != null && clipData.itemCount > 0) {
-          for (i in 0 until clipData.itemCount) {
-              clipData.getItemAt(i)?.uri?.let { uris.add(it) }
-          }
-      }
-      val arrayList = intent.getParcelableArrayListExtra<android.os.Parcelable>(android.content.Intent.EXTRA_STREAM)
-      if (arrayList != null) {
-          for (parcel in arrayList) {
-              (parcel as? android.net.Uri)?.let { uris.add(it) }
-          }
-      }
-      for (uri in uris) {
-          if (uri.scheme == "content") {
-              try {
-                  val flags = intent.flags and (android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-                  if (flags != 0) {
-                      contentResolver.takePersistableUriPermission(uri, flags)
-                  }
-              } catch (e: Exception) {}
-          }
-      }
-  }
 
   private fun handlePopupOrMiniIntent(intent: android.content.Intent?): Boolean {
       if (intent == null) return false
@@ -163,40 +122,21 @@ class MainActivity : ComponentActivity() {
           player?.prepare()
           player?.play()
 
-          if (android.provider.Settings.canDrawOverlays(this)) {
-              val serviceIntent = android.content.Intent(this, com.example.service.PlaybackService::class.java).apply {
-                  putExtra("command", "ACTION_MINIPLAYER")
-              }
-              if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                  startForegroundService(serviceIntent)
-              } else {
-                  startService(serviceIntent)
-              }
-
-              val overlayIntent = android.content.Intent("com.example.ACTION_WIDGET_COMMAND").apply {
-                  putExtra("command", "ACTION_MINIPLAYER")
-                  setPackage(packageName)
-              }
-              sendBroadcast(overlayIntent)
-
-              finish()
-              return true
+          val serviceIntent = android.content.Intent(this, com.example.service.PlaybackService::class.java)
+          if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+              startForegroundService(serviceIntent)
           } else {
-              val permIntent = android.content.Intent(
-                  android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                  android.net.Uri.parse("package:$packageName")
-              ).apply {
-                  addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-              }
-              startActivity(permIntent)
-              android.widget.Toast.makeText(
-                  this,
-                  "Please enable 'Display over other apps' to use Mini Player",
-                  android.widget.Toast.LENGTH_LONG
-              ).show()
-              finish()
-              return true
+              startService(serviceIntent)
           }
+
+          android.widget.Toast.makeText(
+              this,
+              if (mediaItems.size > 1) "Playing ${mediaItems.size} items in background" else "Playing in background",
+              android.widget.Toast.LENGTH_SHORT
+          ).show()
+
+          finish()
+          return true
       } else if (isPip) {
           val targetUriStr = uris.first()
           val targetUri = android.net.Uri.parse(targetUriStr)
@@ -259,7 +199,6 @@ class MainActivity : ComponentActivity() {
   override fun onNewIntent(intent: android.content.Intent) {
       super.onNewIntent(intent)
       setIntent(intent)
-      persistUriPermissions(intent)
       if (handlePopupOrMiniIntent(intent)) {
           return
       }
@@ -268,7 +207,6 @@ class MainActivity : ComponentActivity() {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
-    persistUriPermissions(intent)
     if (handlePopupOrMiniIntent(intent)) {
         return
     }

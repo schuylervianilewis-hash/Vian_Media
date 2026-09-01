@@ -8,12 +8,12 @@ plugins {
 
 android {
   namespace = "com.example"
-  compileSdk = 35
+  compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
     applicationId = "com.shura.vianbrmedia.cecbba"
     minSdk = 24
-    targetSdk = 35
+    targetSdk = 36
     versionCode = 1
     versionName = "1.0"
 
@@ -48,10 +48,6 @@ android {
   buildFeatures {
     compose = true
     buildConfig = true
-  }
-  lint {
-    abortOnError = false
-    checkReleaseBuilds = false
   }
   testOptions { unitTests { isIncludeAndroidResources = true } }
 }

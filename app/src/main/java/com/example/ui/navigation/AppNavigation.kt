@@ -200,9 +200,6 @@ fun AppNavigation(initialUris: List<String> = emptyList(), forceAction: String? 
                 onNavigateBack = { 
                     if (!hasNavigatedBackOnce) {
                         hasNavigatedBackOnce = true
-                        try {
-                            (context as? android.app.Activity)?.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-                        } catch (e: Exception) {}
                         val popped = navController.popBackStack()
                         com.example.LogKeeper.log("popBackStack() returned $popped, current backstack size: ${navController.currentBackStack.value.size}", "Navigation")
                         if (!popped || (initialUris.isNotEmpty() && navController.currentDestination?.route == "main")) {
@@ -365,7 +362,10 @@ fun AppNavigation(initialUris: List<String> = emptyList(), forceAction: String? 
             confirmButton = {},
             dismissButton = {
                 androidx.compose.material3.TextButton(onClick = {
-                    com.example.service.CompressionStatus.stop(context)
+                    val intent = android.content.Intent(context, com.example.service.CompressionService::class.java).apply {
+                        action = "STOP"
+                    }
+                    context.startService(intent)
                 }) {
                     androidx.compose.material3.Text("Cancel")
                 }

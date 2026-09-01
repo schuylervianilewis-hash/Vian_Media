@@ -1832,65 +1832,6 @@ fun VideoEditorScreen(
                                 )
                             }
                         }
-                        
-                        val outputFileSizeStr = remember(exportedPreviewUri) {
-                            if (exportedPreviewUri == null) ""
-                            else {
-                                try {
-                                    val u = Uri.parse(exportedPreviewUri)
-                                    var sizeBytes = 0L
-                                    if (u.scheme == "file") {
-                                        val f = java.io.File(u.path ?: "")
-                                        if (f.exists()) sizeBytes = f.length()
-                                    } else {
-                                        context.contentResolver.openFileDescriptor(u, "r")?.use { pfd ->
-                                            sizeBytes = pfd.statSize
-                                        }
-                                        if (sizeBytes <= 0L) {
-                                            val cursor = context.contentResolver.query(u, arrayOf(android.provider.OpenableColumns.SIZE), null, null, null)
-                                            cursor?.use {
-                                                if (it.moveToFirst()) {
-                                                    val sizeIndex = it.getColumnIndex(android.provider.OpenableColumns.SIZE)
-                                                    if (sizeIndex != -1) sizeBytes = it.getLong(sizeIndex)
-                                                }
-                                            }
-                                        }
-                                    }
-                                    if (sizeBytes > 0L) {
-                                        android.text.format.Formatter.formatFileSize(context, sizeBytes)
-                                    } else ""
-                                } catch (e: Exception) {
-                                    ""
-                                }
-                            }
-                        }
-
-                        if (outputFileSizeStr.isNotEmpty()) {
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Surface(
-                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Info,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp),
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "Size: $outputFileSizeStr",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(onClick = {
                             val newUri = exportedPreviewUri

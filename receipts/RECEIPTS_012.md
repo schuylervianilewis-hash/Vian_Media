@@ -1,8 +1,5 @@
-- Timestamp: 2026-07-27T05:14
-- Summary: Changed Mini Player minimized floating button to use the app icon design.
-- Files: 
-  - MiniPlayerOverlay.kt
-- Actions:
-  - Updated the `isMinimizedExternal` floating button to use the actual app icon (`ic_launcher_foreground`) using an `Image` block (instead of `Icon`) so it retains the original icon colors (white triangle, blue text).
-  - Changed the floating button background to `Color(0xFF2196F3)` to perfectly match the app icon's background color (`ic_launcher_background`), and slightly increased the size to 48dp for better visual proportion and minimum touch target size.
-- Verification: Compiled and verified locally.
+2026-08-07T13:52:00Z
+- Requested: Fix jerky m4s video files playing and editing.
+- Touched: app/src/main/java/com/example/ui/screens/VideoEditorScreen.kt
+- Action: Added `m4s` to the automatic pre-conversion pipeline in `VideoEditorScreen`. Now, when an `m4s` file is opened in the editor, FFmpeg automatically remuxes it (`-vcodec libx264 -preset ultrafast -crf 23 -acodec aac`) into a standard `.mp4` container with proper indexes and keyframes. This resolves the jerkiness and seeking issues caused by raw DASH/HLS segments lacking standalone `moov` atoms.
+- Verification: local build only

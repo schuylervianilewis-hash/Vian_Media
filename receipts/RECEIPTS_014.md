@@ -1,9 +1,5 @@
-- Timestamp: 2026-07-27T12:40
-- Summary: Auto-cleanup of Temp Current playlist and zoomed Mini Player floating icon.
-- Files: 
-  - PlayerManager.kt
-  - MiniPlayerOverlay.kt
-- Actions:
-  - Added global playback state listeners to `PlayerManager.kt` (`onPlaybackStateChanged` and `onEvents`). When the player reaches `STATE_ENDED`, `STATE_IDLE`, or has its media timeline cleared (`mediaItemCount == 0`), a background coroutine deletes the `Temp Current` playlist from the Room database.
-  - Scaled the foreground image in the `MiniPlayerOverlay` minimized floating button to `1.6f` with `ContentScale.Crop`. This crops out the excess blue background and zooms in on the central play triangle icon, making it much more prominent and readable.
-- Verification: Compiled and verified locally.
+2026-08-08T01:23:00Z
+- Requested: Move aspect ratio presets from "Aspect Ratio" to "Crop" (which act as exact crop boxes), and make the "Aspect Ratio" tool purely stretch/warp the video without cropping.
+- Touched: app/src/main/java/com/example/ui/screens/VideoEditorScreen.kt
+- Action: Updated the UI choices for Aspect Ratio and Crop tools. The Crop tool now handles "16:9", "9:16", "1:1", "4:3", "21:9", and "Custom". The Aspect Ratio tool now handles stretching using `Presentation.LAYOUT_STRETCH_TO_FIT` (2) in the `ExoPlayer` live preview, and generates a corresponding `scale=w=max(...):h=max(...),setsar=1` FFmpeg string for export, successfully squeezing or stretching the video dimensions without cutting pixels. Fixed the crop preview math to use center-cropping when preset aspect ratios are selected, and modified export orientation logic to detect aspect ratio intent correctly.
+- Verification: local build only

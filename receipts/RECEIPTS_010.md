@@ -1,8 +1,5 @@
-- Timestamp: 2026-07-27T04:29
-- Summary: Fixed visual reshuffling and flickering after a playlist item is dropped.
-- Files: 
-  - PlaylistDetailScreen.kt
-- Actions:
-  - Drag-and-drop: Immediately snap `translationY` to 0 when the drop is committed (`draggedItemIndex == null`). This prevents the displaced items from animating back to their old positions before jumping to their new logical positions.
-  - Database Updates: Replaced the iterative `updatePlaylistItem` loop with a single batch `updatePlaylistItems` transaction. This prevents multiple intermediate list emissions from the database, which were causing partial updates and visual glitching via the `LaunchedEffect` listener.
-- Verification: Compiled and verified locally.
+2026-08-07T12:58:00Z
+- Requested: Connect the new overlay to PiP button in main player and widget.
+- Touched: app/src/main/java/com/example/widget/MediaWidgetProvider.kt, app/src/main/java/com/example/service/PlaybackService.kt
+- Action: Updated `MediaWidgetProvider` to intercept `ACTION_PIP` and broadcast `ACTION_VIDEO_OVERLAY` to the `PlaybackService`. Updated the media notification custom PiP command handler in `PlaybackService` to launch the video overlay (`showOverlay(true)`) instead of broadcasting the native PiP intent. 
+- Verification: local build only

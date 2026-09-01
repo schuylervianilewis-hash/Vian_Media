@@ -18,7 +18,5 @@ debug.keystore
 debug.keystore.base64
 *.base64
 *.keystore
-*.jks
-*.p12
 *.bak
 patch_*.py

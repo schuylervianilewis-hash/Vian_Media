@@ -1,11 +1,5 @@
-- Timestamp: 2026-07-26T09:17
-- Summary: Styled Mini Player and fixed Playlist drag-and-drop animation.
-- Files: 
-  - MiniPlayerOverlay.kt
-  - PlaylistDetailScreen.kt
-- Actions:
-  - Reduced the folded mini-player button size to 48.dp.
-  - Updated MiniPlayer colors to match the blue (0xFF2196F3) and white theme of the Library.
-  - Replaced the default Slider in MiniPlayer with a custom track/thumb exactly like the Main Player.
-  - Added `Modifier.animateItem()` to the list items in `PlaylistDetailScreen` so list reordering is animated visually rather than just swapping text instantly.
-- Verification: Compiled successfully.
+2026-08-07T12:22:00Z
+- Requested: User issued "Implement" to implement the floating window video player as a substitute for PiP.
+- Touched: app/src/main/java/com/example/ui/components/MiniPlayerOverlay.kt, app/src/main/java/com/example/ui/components/FloatingVideoPlayerOverlay.kt, app/src/main/java/com/example/service/PlaybackService.kt
+- Action: Created `FloatingVideoPlayerOverlay` with a top bar (drag, double-tap to open main player, switch to mini player), a main `PlayerView` maintaining the video aspect ratio naturally with its standard playback controls, and bottom-right floating buttons for close, minimize, and resize. Updated `PlaybackService` to maintain an `isVideoMode` state and dynamically switch between `MiniPlayerOverlay` and `FloatingVideoPlayerOverlay`, preserving their exact size/position. Updated `MiniPlayerOverlay` to feature a button for switching back to the floating video player.
+- Verification: local build only
