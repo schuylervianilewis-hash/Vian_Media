@@ -184,8 +184,11 @@ fun FloatingVideoPlayerOverlay(
                                         IconButton(
                                             onClick = { 
                                                 player?.let { controller ->
-                                                    if (controller.playbackState == androidx.media3.common.Player.STATE_ENDED || controller.playbackState == androidx.media3.common.Player.STATE_IDLE) {
+                                                    if (controller.playbackState == androidx.media3.common.Player.STATE_ENDED) {
                                                         controller.seekTo(0)
+                                                        controller.prepare()
+                                                        controller.play()
+                                                    } else if (controller.playbackState == androidx.media3.common.Player.STATE_IDLE) {
                                                         controller.prepare()
                                                         controller.play()
                                                     } else if (controller.isPlaying) {

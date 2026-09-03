@@ -66,7 +66,10 @@ object PlayerManager {
                 com.example.LogKeeper.logError("PlayerManager", "Failed to query swDecoders", e)
             }
 
-            if (settings.decoderPriority == 2) {
+            // On known problematic hardware chipsets (e.g. Unisoc c2.unisoc.*) or when user selects SW preference,
+            // place software decoders ahead of failing hardware decoders to avoid fatal native buffer crashes
+            val isProblematicHw = result.any { it.name.contains("unisoc", ignoreCase = true) || it.name.contains("sprd", ignoreCase = true) }
+            if (settings.decoderPriority == 2 || (isProblematicHw && (mimeType.contains("vp9", ignoreCase = true) || mimeType.contains("opus", ignoreCase = true)))) {
                 result.sortByDescending { it.softwareOnly || !it.hardwareAccelerated }
             }
 
@@ -289,22 +292,20 @@ object PlayerManager {
     fun release() {
         val player = exoPlayer
         exoPlayer = null
-        try {
-            player?.let { p ->
-                try { p.clearVideoSurface() } catch (e: Exception) {}
-                try { p.stop() } catch (e: Exception) {}
-                try { p.clearMediaItems() } catch (e: Exception) {}
-                val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
-                if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
-                    try { p.release() } catch (e: Exception) {}
-                } else {
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
+            try {
+                player?.let { p ->
+                    try { p.stop() } catch (e: Exception) {}
+                    try { p.clearVideoSurface() } catch (e: Exception) {}
+                    try { p.clearMediaItems() } catch (e: Exception) {}
+                    val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
                     mainHandler.post {
                         try { p.release() } catch (e: Exception) {}
                     }
                 }
+            } catch (e: Exception) {
+                com.example.LogKeeper.logError("PlayerManager", "Error releasing ExoPlayer", e)
             }
-        } catch (e: Exception) {
-            com.example.LogKeeper.logError("PlayerManager", "Error releasing ExoPlayer", e)
         }
         try {
             loudnessEnhancer?.release()

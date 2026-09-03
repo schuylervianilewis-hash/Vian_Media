@@ -108,6 +108,10 @@ fun AudioTrimmerScreen(
         }
     }
     DisposableEffect(player) {
+        // Resource Exclusivity: Pause background playback to yield audio focus
+        try {
+            com.example.service.PlayerManager.exoPlayer?.pause()
+        } catch (e: Exception) {}
         onDispose {
             player.release()
         }

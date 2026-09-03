@@ -289,17 +289,12 @@ class MainActivity : ComponentActivity() {
                     .maxSizePercent(0.15)
                     .build()
             }
-            .diskCache {
-                coil.disk.DiskCache.Builder()
-                    .directory(this.cacheDir.resolve("thumbnail_cache"))
-                    .maxSizeBytes(100L * 1024 * 1024) // 100 MB max
-                    .build()
-            }
             .crossfade(true)
             .build()
     )
 
     LogKeeper.init(this)
+    com.example.data.CacheManager.purgeOrphanedTempFiles(this)
     enableEdgeToEdge(
         statusBarStyle = androidx.activity.SystemBarStyle.light(
             android.graphics.Color.TRANSPARENT,

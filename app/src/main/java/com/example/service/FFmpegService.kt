@@ -42,8 +42,9 @@ class FFmpegService : Service() {
         
         // Cleanup orphaned temp files from previous crashed/killed sessions
         cacheDir.listFiles()?.forEach { file ->
-            if (file.name.startsWith("ffmpeg_in_") || file.name.startsWith("ffmpeg_out_")) {
-                file.delete()
+            val n = file.name
+            if (n.startsWith("ffmpeg_") || n.startsWith("editor_") || n.startsWith("join_") || n.startsWith("preconverted_")) {
+                if (file.isDirectory) file.deleteRecursively() else file.delete()
             }
         }
         
@@ -75,6 +76,13 @@ class FFmpegService : Service() {
             .build()
 
         startForeground(2, notification)
+
+        // Resource Exclusivity: Pause active video playback to yield CPU cores and decoders to FFmpeg
+        try {
+            com.example.service.PlayerManager.exoPlayer?.pause()
+        } catch (e: Exception) {
+            LogKeeper.logError("FFmpegService", "Could not pause player: ${e.message}", e)
+        }
 
         FFmpegStatus.isRunning = true
         FFmpegStatus.lastOutputUri = null
@@ -301,6 +309,16 @@ class FFmpegService : Service() {
             if (actualInputFile != tempInFile && actualInputFile.exists()) actualInputFile.delete()
             pngFramesDir?.deleteRecursively()
             if (tempOutFile.exists()) tempOutFile.delete()
+            // Zero-Memory: Delete any internal cache temp files passed as input (e.g. editor_converted_*)
+            if (uri.scheme == "file" || uriStr.startsWith("file://")) {
+                try {
+                    val p = uri.path ?: uriStr.removePrefix("file://")
+                    val f = java.io.File(p)
+                    if (f.exists() && f.parentFile?.absolutePath == cacheDir.absolutePath) {
+                        f.delete()
+                    }
+                } catch (e: Exception) {}
+            }
 
             count++
             val notification = NotificationCompat.Builder(this@FFmpegService, CHANNEL_ID)
@@ -401,5 +419,13 @@ class FFmpegService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         serviceJob.cancel()
+        cacheDir.listFiles()?.forEach { file ->
+            val n = file.name
+            if (n.startsWith("ffmpeg_") || n.startsWith("join_")) {
+                try {
+                    if (file.isDirectory) file.deleteRecursively() else file.delete()
+                } catch (e: Exception) {}
+            }
+        }
     }
 }

@@ -271,6 +271,7 @@ fun PlayerScreen(
     var sleepTimerEndTime by remember { mutableStateOf<Long?>(null) }
     var showSleepTimerDialog by remember { mutableStateOf(false) }
     var lastKnownIsPortrait by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<Boolean?>(null) }
+    var wasPlayingBeforePause by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     
     var scale by remember { mutableFloatStateOf(1f) }
     var offsetX by remember { mutableFloatStateOf(0f) }
@@ -278,6 +279,8 @@ fun PlayerScreen(
     var backgroundPlayEnabled by remember { mutableStateOf(false) }
     val backgroundPlayEnabledRef = androidx.compose.runtime.rememberUpdatedState(backgroundPlayEnabled)
     val forceBackgroundPlay = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
+
+    var decoderRetryCount by remember { mutableIntStateOf(0) }
 
     val playerViewRef = remember { mutableStateOf<PlayerView?>(null) }
     androidx.activity.compose.BackHandler {
@@ -293,11 +296,13 @@ fun PlayerScreen(
             }
         }
         if (!backgroundPlayEnabledRef.value && !forceBackgroundPlay.get()) {
+            mediaController?.let { controller ->
+                try { controller.pause() } catch (e: Exception) {}
+                try { controller.stop() } catch (e: Exception) {}
+            }
             try { playerViewRef.value?.player = null } catch (e: Exception) {}
             mediaController?.let { controller ->
                 try { controller.clearVideoSurface() } catch (e: Exception) {}
-                try { controller.pause() } catch (e: Exception) {}
-                try { controller.stop() } catch (e: Exception) {}
                 try { controller.clearMediaItems() } catch (e: Exception) {}
             }
             try {
@@ -486,8 +491,17 @@ fun PlayerScreen(
             }
             controller.play()
             
-            // Load playlist in background
+            // Load playlist in background with resource awareness
             kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                // Yield storage I/O and CPU to initial video buffering and decoder setup
+                kotlinx.coroutines.delay(1000)
+                
+                // Do not perform heavy device-wide library scan if background transcoding/compression is running
+                if (com.example.service.FFmpegStatus.isRunning || com.example.service.CompressionStatus.isRunning) {
+                    com.example.LogKeeper.log("PlayerScreen: Deferred background playlist scan because FFmpeg/Compression service is running", "PlayerScreen")
+                    return@launch
+                }
+
                 val repository = com.example.data.MediaRepository(context.applicationContext as android.app.Application)
                 val folders = repository.getMediaFolders()
                 var playlistItems = emptyList<MediaItem>()
@@ -563,12 +577,20 @@ fun PlayerScreen(
             }
             
 
-        } else if (controller.playbackState == androidx.media3.common.Player.STATE_ENDED || controller.playbackState == androidx.media3.common.Player.STATE_IDLE) {
+        } else if (controller.playbackState == androidx.media3.common.Player.STATE_ENDED) {
             controller.seekTo(0)
             controller.prepare()
             controller.play()
+            wasPlayingBeforePause = true
+        } else if (controller.playbackState == androidx.media3.common.Player.STATE_IDLE) {
+            controller.prepare()
+            if (wasPlayingBeforePause) {
+                controller.play()
+            }
         } else {
-            controller.play()
+            if (wasPlayingBeforePause) {
+                controller.play()
+            }
         }
     }
 
@@ -809,12 +831,18 @@ fun PlayerScreen(
                 val currentPos = controller.currentPosition
                 if (error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_DECODING_FAILED ||
                     error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_DECODER_INIT_FAILED) {
-                    com.example.LogKeeper.log("Decoder error encountered, attempting auto-retry with fallback...", "PlayerScreen")
-                    controller.prepare()
-                    if (currentPos > 0) {
-                        controller.seekTo(currentPos)
+                    if (decoderRetryCount < 2) {
+                        decoderRetryCount++
+                        com.example.LogKeeper.log("Decoder error encountered, attempting auto-retry $decoderRetryCount with fallback...", "PlayerScreen")
+                        controller.prepare()
+                        if (currentPos > 0) {
+                            controller.seekTo(currentPos)
+                        }
+                        controller.play()
+                    } else {
+                        com.example.LogKeeper.log("Decoder error exceeded max retries. Pausing playback to avoid crash loop.", "PlayerScreen")
+                        controller.pause()
                     }
-                    controller.play()
                 }
             }
             override fun onEvents(player: androidx.media3.common.Player, events: androidx.media3.common.Player.Events) {
@@ -898,6 +926,10 @@ fun PlayerScreen(
                     
                     val activity = context.findActivity()
                     val isPip = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) activity?.isInPictureInPictureMode == true else false
+                    
+                    val isCurrentlyPlaying = controller.isPlaying || controller.playWhenReady
+                    wasPlayingBeforePause = isCurrentlyPlaying
+                    
                     // We don't call stop() here anymore. The PlaybackService will handle
                     // inactivity timeouts (5 mins) to release resources gracefully.
                     if (!isPip && !backgroundPlayEnabledRef.value && !forceBackgroundPlay.get()) {
@@ -922,8 +954,17 @@ fun PlayerScreen(
                         }
                     } catch (e: Exception) {}
 
-                    // Check if controller was idle / errored or timeline cleared during lock
-                    if (controller.playbackState == androidx.media3.common.Player.STATE_IDLE || controller.mediaItemCount == 0 || controller.currentMediaItem == null) {
+                    val isCurrentItem = controller.currentMediaItem?.mediaId == decodedUri.toString()
+                    if (isCurrentItem) {
+                        if (controller.playbackState == androidx.media3.common.Player.STATE_IDLE) {
+                            com.example.LogKeeper.log("PlayerScreen ON_RESUME: Controller is in STATE_IDLE for current item, calling prepare()", "PlayerScreen")
+                            controller.prepare()
+                        }
+                        if (wasPlayingBeforePause) {
+                            com.example.LogKeeper.log("PlayerScreen ON_RESUME: Resuming playback (wasPlayingBeforePause=true)", "PlayerScreen")
+                            controller.play()
+                        }
+                    } else if (controller.playbackState == androidx.media3.common.Player.STATE_IDLE || controller.mediaItemCount == 0 || controller.currentMediaItem == null) {
                         com.example.LogKeeper.log("PlayerScreen ON_RESUME: Controller is in STATE_IDLE or empty, re-preparing media item for $decodedUriString", "PlayerScreen")
                         val mediaMetadataBuilder = androidx.media3.common.MediaMetadata.Builder()
                         val fileName = currentMediaTitle.ifEmpty { decodedUri.lastPathSegment ?: "Media" }
@@ -943,6 +984,9 @@ fun PlayerScreen(
                         val savedPos = com.example.data.SettingsManager.getInstance(context).getPlaybackPosition(decodedUriString, fileName)
                         if (savedPos > 0) {
                             controller.seekTo(savedPos)
+                        }
+                        if (wasPlayingBeforePause) {
+                            controller.play()
                         }
                     }
                 }
@@ -993,16 +1037,24 @@ fun PlayerScreen(
                 onDoubleTap = {
                     if (isLocked) return@detectTapGestures
                     mediaController?.let { controller ->
-                        if (controller.playbackState == androidx.media3.common.Player.STATE_ENDED || controller.playbackState == androidx.media3.common.Player.STATE_IDLE) {
+                        if (controller.playbackState == androidx.media3.common.Player.STATE_ENDED) {
                             controller.seekTo(0)
                             controller.prepare()
                             controller.play()
+                            wasPlayingBeforePause = true
+                            showControls = false
+                        } else if (controller.playbackState == androidx.media3.common.Player.STATE_IDLE) {
+                            controller.prepare()
+                            controller.play()
+                            wasPlayingBeforePause = true
                             showControls = false
                         } else if (controller.isPlaying) {
                             controller.pause()
+                            wasPlayingBeforePause = false
                             showControls = true
                         } else {
                             controller.play()
+                            wasPlayingBeforePause = true
                             showControls = false
                         }
                         flashIsPlaying = controller.isPlaying
@@ -1160,7 +1212,9 @@ fun PlayerScreen(
                 }
             },
             update = { view ->
-                view.player = mediaController
+                if (view.player != mediaController) {
+                    view.player = mediaController
+                }
                 view.resizeMode = if (resizeMode == 5) androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT else resizeMode
                 view.keepScreenOn = keepScreenAwake && isPlaying
                 view.subtitleView?.let { subtitleView ->
@@ -1183,7 +1237,7 @@ fun PlayerScreen(
                 }
             },
             onReset = { view ->
-                view.player = null
+                // Do not strip player during view recycling/recomposition to avoid surface detachment freezes
             },
             onRelease = { view ->
                 view.player = null
@@ -1744,14 +1798,21 @@ fun PlayerScreen(
                                     onClick = {
                                         com.example.LogKeeper.log("Play/Pause button clicked (currently isPlaying=$isPlaying)", "PlayerScreen")
                                         mediaController?.let { controller ->
-                                            if (controller.playbackState == androidx.media3.common.Player.STATE_ENDED || controller.playbackState == androidx.media3.common.Player.STATE_IDLE) {
+                                            if (controller.playbackState == androidx.media3.common.Player.STATE_ENDED) {
                                                 controller.seekTo(0)
                                                 controller.prepare()
                                                 controller.play()
+                                                wasPlayingBeforePause = true
+                                            } else if (controller.playbackState == androidx.media3.common.Player.STATE_IDLE) {
+                                                controller.prepare()
+                                                controller.play()
+                                                wasPlayingBeforePause = true
                                             } else if (controller.isPlaying) {
                                                 controller.pause()
+                                                wasPlayingBeforePause = false
                                             } else {
                                                 controller.play()
+                                                wasPlayingBeforePause = true
                                             }
                                         }
                                     },

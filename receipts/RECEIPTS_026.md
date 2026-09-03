@@ -118,3 +118,100 @@
 * Deviation: None
 * Known issues: None
 
+* Timestamp: 2026-09-01T22:01:00Z
+* Summary: Removed invalid kotlin languageSettings block from app/build.gradle.kts that caused Gradle DSL configuration failure in CI.
+* Files touched:
+  - app/build.gradle.kts
+  - receipts/RECEIPTS_026.md
+* What was actually done:
+  - Removed lines 128-133 (`kotlin { sourceSets.all { languageSettings.optIn(...) } }`) in `app/build.gradle.kts`.
+  - Retained proper task-level compiler opt-ins via `tasks.withType<KotlinCompile> { compilerOptions { freeCompilerArgs.add(...) } }`.
+* Verification: local build only
+* Deviation: None
+* Known issues: None
+
+* Timestamp: 2026-09-02T14:55:00Z
+* Summary: Fixed VP9/Opus hardware decoder crash loops on Unisoc chipsets and surface detachment timeout freezes during navigation.
+* Files touched:
+  - app/src/main/java/com/example/service/PlayerManager.kt
+  - app/src/main/java/com/example/ui/screens/PlayerScreen.kt
+  - app/src/main/java/com/example/service/PlaybackService.kt
+  - receipts/RECEIPTS_026.md
+* What was actually done:
+  - Updated `PlayerManager.customMediaCodecSelector` to automatically prioritize software decoders (like `c2.android.vp9.decoder` and `c2.android.opus.decoder`) when Unisoc/Sprd chipsets are detected or when VP9/Opus streams encounter failing hardware decoders.
+  - Made `PlayerManager.release()` fully asynchronous via background dispatcher to prevent blocking the main Choreographer thread during codec deadlocks.
+  - In `PlayerScreen.kt`, pause and stop the player prior to clearing the surface and capped decoding error auto-retries to 2 attempts, preventing infinite retry loops.
+  - In `PlaybackService.kt`, capped decoding error auto-retries to 2 attempts and reset counter upon `onMediaItemTransition`.
+* Verification: local build only
+* Deviation: None
+* Known issues: None
+
+* Timestamp: 2026-09-02T16:30:00Z
+* Summary: Implemented Zero-Memory Cache architecture (Option 0 memory-only Coil thumbnail cache, auto-deletion of editor/converter/compressor temps, startup orphan purge, and Clear Unused Data setting).
+* Files touched:
+  - app/src/main/java/com/example/data/CacheManager.kt
+  - app/src/main/java/com/example/MainActivity.kt
+  - app/src/main/java/com/example/service/CompressionService.kt
+  - app/src/main/java/com/example/service/FFmpegService.kt
+  - app/src/main/java/com/example/ui/screens/VideoEditorScreen.kt
+  - app/src/main/java/com/example/ui/screens/SettingsScreen.kt
+  - BLUEPRINT.md
+  - receipts/RECEIPTS_026.md
+* What was actually done:
+  - Created `com.example.data.CacheManager` with utilities to safely calculate non-library cache size, recursively purge temporary cache files and image caches, and auto-purge orphaned editing/converting files at startup.
+  - In `MainActivity.kt`, removed Coil `.diskCache` (Option 0: Memory-only cache, 0 MB disk footprint) and triggered background startup purge for orphaned temp files.
+  - In `CompressionService.kt`, automatically deleted intermediate edited input files (`edited_*.jpg` from PhotoEditorScreen) upon compression completion in the `finally` block.
+  - In `FFmpegService.kt`, deleted temporary inputs residing in `cacheDir` (such as `editor_converted_*.mp4`) upon processing completion and added orphan sweeps in `onCreate` and `onDestroy`.
+  - In `VideoEditorScreen.kt`, tracked session temporary files via `sessionTempFiles`, deleted `inputFile` immediately after pre-conversion, and registered a `DisposableEffect` to purge all session temp files when navigating away.
+  - In `SettingsScreen.kt`, added an "Unused App Data & Cache" section in `StorageSettingsPage` displaying dynamic cache size and an interactive "Clear Unused Data" button with asynchronous progress indication and Toast feedback.
+* Verification: local build only
+* Deviation: None
+* Known issues: None
+
+* Timestamp: 2026-09-02T19:15:00Z
+* Summary: Fixed video playback freezing/stuck at 0:00 upon unlocking screen by removing redundant seekTo(0) in STATE_IDLE, preserving playWhenReady across backgrounding, and preventing surface detachment on AndroidView reset.
+* Files touched:
+  - app/src/main/java/com/example/ui/screens/PlayerScreen.kt
+  - app/src/main/java/com/example/ui/components/FloatingVideoPlayerOverlay.kt
+  - BLUEPRINT.md
+  - receipts/RECEIPTS_026.md
+* What was actually done:
+  - In `PlayerScreen.kt`:
+    - Added `wasPlayingBeforePause` (persisted via `rememberSaveable`) to remember whether the user was actively playing prior to screen lock/pause.
+    - In `ON_PAUSE`, recorded `isCurrentlyPlaying = controller.isPlaying || controller.playWhenReady` into `wasPlayingBeforePause`.
+    - In `ON_RESUME`, differentiated whether the media item is already active: if current media matches `decodedUri`, call `controller.prepare()` on `STATE_IDLE` without resetting position or calling `setMediaItem`, and cleanly resume playback if `wasPlayingBeforePause` was true.
+    - In `LaunchedEffect(uriString, mediaController)`, separated `STATE_ENDED` (which rewinds to 0) from `STATE_IDLE` (which only calls `prepare()` and resumes without seeking to 0).
+    - In the double-tap gesture and center Play/Pause button handlers, removed mandatory `controller.seekTo(0)` on `STATE_IDLE`, and updated `wasPlayingBeforePause` on play/pause actions.
+    - In `AndroidView`, prevented setting `view.player = null` during `onReset` to avoid destroying the ExoPlayer rendering surface and triggering decoder detachment during lock/unlock recompositions.
+  - In `FloatingVideoPlayerOverlay.kt`:
+    - Removed `controller.seekTo(0)` on `STATE_IDLE` in the play/pause button handler.
+  - In `BLUEPRINT.md`:
+    - Documented the playback resumption and surface detachment fix in the progress ledger.
+* Verification: local build only
+* Deviation: None
+* Known issues: None
+
+* Timestamp: 2026-09-03T02:36:00Z
+* Summary: Implemented Heavy Resource Exclusivity ensuring only one resource-intensive task (ExoPlayer video decoding, Video/Photo/Audio editors, FFmpeg rendering, and Batch compression) runs at a time.
+* Files touched:
+  - app/src/main/java/com/example/service/FFmpegService.kt
+  - app/src/main/java/com/example/service/CompressionService.kt
+  - app/src/main/java/com/example/ui/screens/VideoEditorScreen.kt
+  - app/src/main/java/com/example/ui/screens/PhotoEditorScreen.kt
+  - app/src/main/java/com/example/ui/screens/AudioTrimmerScreen.kt
+  - app/src/main/java/com/example/ui/screens/PlayerScreen.kt
+  - BLUEPRINT.md
+  - receipts/RECEIPTS_026.md
+* What was actually done:
+  - In `FFmpegService.kt`: Added explicit pause of `PlayerManager.exoPlayer` upon starting foreground execution to yield CPU cores and hardware decoders to FFmpegKit.
+  - In `CompressionService.kt`: Added explicit pause of `PlayerManager.exoPlayer` upon starting foreground compression to prevent memory contention/OOM during heavy bitmap processing.
+  - In `VideoEditorScreen.kt`:
+    - Added `DisposableEffect(Unit)` pausing background playback on screen entry to prevent hardware decoder starvation.
+    - Added `exoPlayer?.pause()` prior to initiating FFmpeg export render jobs.
+  - In `PhotoEditorScreen.kt`: Added `DisposableEffect(Unit)` pausing background playback on screen entry to free memory for high-resolution image editing.
+  - In `AudioTrimmerScreen.kt`: Added `PlayerManager.exoPlayer?.pause()` on screen entry to prevent concurrent audio playback.
+  - In `PlayerScreen.kt`: Added a 1000ms delay to background playlist loading to prioritize initial video buffering and decoder setup, and skipped device-wide `MediaRepository.getMediaFolders()` scans entirely if `FFmpegStatus.isRunning` or `CompressionStatus.isRunning`.
+  - In `BLUEPRINT.md`: Documented the Heavy Resource Exclusivity Architecture milestone.
+* Verification: local build only
+* Deviation: None
+* Known issues: None

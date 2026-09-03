@@ -75,6 +75,14 @@ fun PhotoEditorScreen(uriString: String, onNavigateBack: () -> Unit) {
     
     val touchSlop = 60f
 
+    DisposableEffect(Unit) {
+        // Resource Exclusivity: Pause background playback to prevent memory pressure while editing photos
+        try {
+            com.example.service.PlayerManager.exoPlayer?.pause()
+        } catch (e: Exception) {}
+        onDispose {}
+    }
+
     LaunchedEffect(uriString) {
         withContext(Dispatchers.IO) {
             try {

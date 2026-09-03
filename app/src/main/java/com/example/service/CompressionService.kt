@@ -86,6 +86,13 @@ class CompressionService : Service() {
 
         startForeground(1, notification)
 
+        // Resource Exclusivity: Pause active video playback to prevent memory pressure/OOM during heavy bitmap compression
+        try {
+            com.example.service.PlayerManager.exoPlayer?.pause()
+        } catch (e: Exception) {
+            LogKeeper.logError("Compressor", "Could not pause player: ${e.message}", e)
+        }
+
         CompressionStatus.isRunning = true
         CompressionStatus.totalFiles = uris.size
         CompressionStatus.currentFile = 0
@@ -212,6 +219,16 @@ class CompressionService : Service() {
                 }
                 if (sourceBitmap != null && !sourceBitmap!!.isRecycled) {
                     sourceBitmap?.recycle()
+                }
+                // Zero-Memory: Automatically delete temporary editor files (e.g. edited_*.jpg)
+                if (uri.scheme == "file" || uriStr.startsWith("file://") || uriStr.contains("edited_")) {
+                    try {
+                        val path = uri.path ?: uriStr.removePrefix("file://")
+                        val file = java.io.File(path)
+                        if (file.exists() && (file.parentFile?.absolutePath == cacheDir.absolutePath || file.name.startsWith("edited_"))) {
+                            file.delete()
+                        }
+                    } catch (e: Exception) {}
                 }
             }
             if (isCancelled || !serviceJob.isActive) break

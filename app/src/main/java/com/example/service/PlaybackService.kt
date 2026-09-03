@@ -53,6 +53,7 @@ override val savedStateRegistry: SavedStateRegistry get() = savedStateRegistryCo
 
 private var mediaSession: MediaSession? = null
 private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+private var decoderServiceRetryCount = 0
 
 // Removed inactivity timeout
 
@@ -96,6 +97,7 @@ override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?,
         else -> "UNKNOWN($reason)"
     }
     com.example.LogKeeper.log("PlaybackService: onMediaItemTransition to '${mediaItem?.mediaMetadata?.title}' (reason: $reasonStr)", "PlaybackService")
+    decoderServiceRetryCount = 0
     updateWidgetUI()
 }
 override fun onRepeatModeChanged(repeatMode: Int) {
@@ -121,13 +123,19 @@ override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
     val player = PlayerManager.exoPlayer
     if (player != null && (error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_DECODING_FAILED ||
         error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_DECODER_INIT_FAILED)) {
-        val currentPos = player.currentPosition
-        com.example.LogKeeper.log("PlaybackService: Decoder error detected, preparing player with fallback...", "PlaybackService")
-        player.prepare()
-        if (currentPos > 0) {
-            player.seekTo(currentPos)
+        if (decoderServiceRetryCount < 2) {
+            decoderServiceRetryCount++
+            val currentPos = player.currentPosition
+            com.example.LogKeeper.log("PlaybackService: Decoder error detected, preparing player with fallback (attempt $decoderServiceRetryCount)...", "PlaybackService")
+            player.prepare()
+            if (currentPos > 0) {
+                player.seekTo(currentPos)
+            }
+            player.play()
+        } else {
+            com.example.LogKeeper.log("PlaybackService: Decoder error exceeded retry limit, pausing player.", "PlaybackService")
+            player.pause()
         }
-        player.play()
     }
 }
 override fun onPlaybackStateChanged(playbackState: Int) {

@@ -211,6 +211,16 @@ private fun StorageSettingsPage(onNavigateBack: () -> Unit) {
         }
     }
 
+    val scope = rememberCoroutineScope()
+    var cacheSizeBytes by remember { mutableStateOf(0L) }
+    var isClearing by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            cacheSizeBytes = com.example.data.CacheManager.getUnusedCacheSizeBytes(context)
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -283,6 +293,58 @@ private fun StorageSettingsPage(onNavigateBack: () -> Unit) {
             Spacer(modifier = Modifier.height(4.dp))
             Button(onClick = { showExcludeDialog = true }) {
                 Text("Add Excluded Folder")
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text("Unused App Data & Cache", style = MaterialTheme.typography.labelLarge)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                "Temporary cache from editor, compressor, trimmer, and converter. Safe to clear anytime. Does not affect your playlists, library, playback history, or files on your device.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+            ) {
+                Text(
+                    "Cache Size: ${com.example.data.CacheManager.formatBytes(cacheSizeBytes)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f)
+                )
+                Button(
+                    onClick = {
+                        if (!isClearing) {
+                            isClearing = true
+                            scope.launch {
+                                val freed = com.example.data.CacheManager.clearUnusedCache(context)
+                                cacheSizeBytes = com.example.data.CacheManager.getUnusedCacheSizeBytes(context)
+                                isClearing = false
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "Cleared ${com.example.data.CacheManager.formatBytes(freed)} of unused data",
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        }
+                    },
+                    enabled = !isClearing
+                ) {
+                    if (isClearing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                    Text("Clear Unused Data")
+                }
             }
         }
         

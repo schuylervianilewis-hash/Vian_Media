@@ -129,6 +129,24 @@ fun VideoEditorScreen(
 
     val effectiveUri = convertedUri ?: uriString
     val effectiveMimeType = if (convertedUri != null) "video/mp4" else mimeType
+
+    // Zero-Memory: Track session temporary files and delete them on screen exit
+    val sessionTempFiles = remember { java.util.concurrent.CopyOnWriteArraySet<java.io.File>() }
+    DisposableEffect(Unit) {
+        // Resource Exclusivity: Pause background player to prevent decoder/CPU contention
+        try {
+            com.example.service.PlayerManager.exoPlayer?.pause()
+        } catch (e: Exception) {}
+        onDispose {
+            sessionTempFiles.forEach { file ->
+                try {
+                    if (file.isDirectory) file.deleteRecursively() else file.delete()
+                } catch (e: Exception) {}
+            }
+            sessionTempFiles.clear()
+        }
+    }
+
     LaunchedEffect(editState.joinVideoUri) {
         if (editState.joinVideoUri != null) {
             try {
@@ -164,6 +182,7 @@ fun VideoEditorScreen(
                     f
                 }
                 val outputFile = java.io.File(context.cacheDir, "editor_converted_${System.currentTimeMillis()}.mp4")
+                sessionTempFiles.add(outputFile)
                 
                 if (mimeType == "image/webp") {
                     val framesDir = java.io.File(context.cacheDir, "editor_frames_${System.currentTimeMillis()}")
@@ -275,6 +294,9 @@ fun VideoEditorScreen(
                         }
                     }
                 }
+                if (inputFile.exists()) {
+                    inputFile.delete()
+                }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -299,6 +321,7 @@ fun VideoEditorScreen(
                     f
                 }
                 val outputFile = java.io.File(context.cacheDir, "editor_converted_${System.currentTimeMillis()}.mp4")
+                sessionTempFiles.add(outputFile)
                 withContext(Dispatchers.IO) {
                     val cmd = "-y -i '${inputFile.absolutePath}' -vcodec libx264 -preset ultrafast -crf 23 -acodec aac -metadata:s:v:0 rotate=0 '${outputFile.absolutePath}'"
                     val session = com.arthenica.ffmpegkit.FFmpegKit.execute(cmd)
@@ -1542,6 +1565,7 @@ fun VideoEditorScreen(
                             try {
                                 val u = android.net.Uri.parse(editState.joinVideoUri!!)
                                 val tempFile = java.io.File(context.cacheDir, "join_${System.currentTimeMillis()}.mp4")
+                                sessionTempFiles.add(tempFile)
                                 context.contentResolver.openInputStream(u)?.use { input ->
                                     tempFile.outputStream().use { output ->
                                         input.copyTo(output)
@@ -1774,6 +1798,11 @@ fun VideoEditorScreen(
                         LogKeeper.log("Starting Render job for video file. Output Format: $format, Resolution: $res, FPS: $fps, Preset: $presetArg, Quality level: $quality (CRF $crf)", "VideoEditor")
                         LogKeeper.log("Constructed FFmpeg Command: $cmd", "VideoEditor")
                         
+                        // Resource Exclusivity: Pause editor preview player while FFmpeg is encoding
+                        try {
+                            exoPlayer?.pause()
+                        } catch (e: Exception) {}
+
                         // 3. Start FFmpegService
                         val intent = android.content.Intent(context, com.example.service.FFmpegService::class.java).apply {
                             putStringArrayListExtra("uris", arrayListOf(effectiveUri))
