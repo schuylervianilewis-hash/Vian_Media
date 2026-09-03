@@ -224,6 +224,7 @@ fun PlayerScreen(
     var mediaController by remember { mutableStateOf(com.example.service.PlayerManager.exoPlayer) }
     var showPlayerSettingsDialog by remember { mutableStateOf(false) }
     var showControls by remember { mutableStateOf(false) }
+    var controlsInteractionTrigger by remember { mutableLongStateOf(0L) }
     var showDetailsDialog by remember { mutableStateOf(false) }
     var detailsName by remember { mutableStateOf("Unknown") }
     var detailsSize by remember { mutableStateOf("Unknown") }
@@ -259,7 +260,13 @@ fun PlayerScreen(
             showPlayPauseFlash = false
         }
     }
-    val decodedUriString = remember(uriString) { String(android.util.Base64.decode(uriString, android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP)) }
+    val decodedUriString = remember(uriString) {
+        try {
+            String(android.util.Base64.decode(uriString, android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP))
+        } catch (e: Exception) {
+            uriString
+        }
+    }
     val decodedUri = remember(uriString) { Uri.parse(decodedUriString) }
     var currentMediaTitle by remember { mutableStateOf(getDisplayNameFromUri(context, decodedUri)) }
     var currentMediaUri by remember { mutableStateOf(decodedUri) }
@@ -432,7 +439,7 @@ fun PlayerScreen(
         }
     }
 
-    LaunchedEffect(showControls) {
+    LaunchedEffect(showControls, controlsInteractionTrigger) {
         if (!showControls) {
             showBrightnessSlider = false
         } else {
@@ -1073,13 +1080,22 @@ fun PlayerScreen(
                 var currentGesture = GestureType.NONE
                 var dragDistanceX = 0f
                 var dragDistanceY = 0f
-                var lastVirtualVolume = -1
                 var lastSeekTime = 0L
-                
                 val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
                 val maxVolume = audioManager.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
                 val startVolume = audioManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
-                val startBoost = boostGainMb
+                val settings = com.example.data.SettingsManager.getInstance(context)
+                val boosterEnabled = settings.audioBoosterEnabled
+                val effectiveBoost = if (boosterEnabled) boostGainMb else 0
+                val startVolumeRatio = if (maxVolume > 0) {
+                    if (effectiveBoost > 0) {
+                        0.5f + (effectiveBoost.toFloat() / 1500f) * 0.5f
+                    } else {
+                        (startVolume.toFloat() / maxVolume.toFloat()) * 0.5f
+                    }
+                } else 0f
+                var lastAppliedSystemVolume = startVolume
+                var lastAppliedBoost = effectiveBoost
                 
                 val window = context.findActivity()?.window
                 var startBrightness = window?.attributes?.screenBrightness ?: -1f
@@ -1156,28 +1172,34 @@ fun PlayerScreen(
                                     change.consume()
                                 }
                                 GestureType.VOLUME -> {
-                                    val virtualMaxVolume = maxVolume * 2
-                                    val virtualStartVolume = startVolume + (startBoost.toFloat() / 1500f * maxVolume).toInt()
-                                    val volumeChange = -(dragDistanceY / size.height) * virtualMaxVolume
-                                    val virtualNewVolume = (virtualStartVolume + volumeChange).toInt().coerceIn(0, virtualMaxVolume)
+                                    val volumeScale = if (boosterEnabled) 1.0f else 0.5f
+                                    val volumeChange = -(dragDistanceY / size.height) * volumeScale
+                                    val currentRatio = (startVolumeRatio + volumeChange).coerceIn(0f, volumeScale)
                                     
-                                    if (virtualNewVolume != lastVirtualVolume) {
-                                        lastVirtualVolume = virtualNewVolume
-                                        val newVolume = virtualNewVolume.coerceAtMost(maxVolume)
-                                        val newBoost = if (virtualNewVolume > maxVolume) {
-                                            ((virtualNewVolume - maxVolume).toFloat() / maxVolume * 1500f).toInt()
-                                        } else {
-                                            0
-                                        }
-                                        
-                                        audioManager.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, newVolume, 0)
-                                        boostGainMb = newBoost
-                                        val settings = com.example.data.SettingsManager.getInstance(context)
-                                        settings.boostGainMb = newBoost
-                                        com.example.service.PlayerManager.applyAudioBoosterSettings(settings.audioBoosterEnabled, newBoost)
+                                    val targetSystemVolume = if (currentRatio <= 0.5f) {
+                                        if (maxVolume > 0) ((currentRatio / 0.5f) * maxVolume).roundToInt().coerceIn(0, maxVolume) else 0
+                                    } else {
+                                        maxVolume
                                     }
-                                    gestureVolumeRatio = virtualNewVolume.toFloat() / virtualMaxVolume.toFloat()
-                                    gestureText = "Volume: ${(gestureVolumeRatio * 200).roundToInt()}"
+                                    val targetBoost = if (boosterEnabled && currentRatio > 0.5f) {
+                                        (((currentRatio - 0.5f) / 0.5f) * 1500f).roundToInt().coerceIn(0, 1500)
+                                    } else {
+                                        0
+                                    }
+                                    
+                                    if (targetSystemVolume != lastAppliedSystemVolume) {
+                                        lastAppliedSystemVolume = targetSystemVolume
+                                        audioManager.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, targetSystemVolume, 0)
+                                    }
+                                    if (targetBoost != lastAppliedBoost) {
+                                        lastAppliedBoost = targetBoost
+                                        boostGainMb = targetBoost
+                                        settings.boostGainMb = targetBoost
+                                        com.example.service.PlayerManager.applyAudioBoosterSettings(settings.audioBoosterEnabled, targetBoost)
+                                    }
+                                    
+                                    gestureVolumeRatio = currentRatio
+                                    gestureText = "Volume: ${(currentRatio * 200).roundToInt()}"
                                     change.consume()
                                 }
                                 else -> {}
@@ -1419,13 +1441,30 @@ fun PlayerScreen(
                 }
             } else {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    // Top controls background
-                    Box(modifier = Modifier
-                        .fillMaxWidth()
-                        .height(140.dp)
-                        .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.9f), Color.Transparent)))
-                        .align(Alignment.TopCenter)
-                    )
+                    // Top controls container (traps taps so controls remain visible)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.TopCenter)
+                            .pointerInput(Unit) {
+                                awaitEachGesture {
+                                    awaitFirstDown(requireUnconsumed = false)
+                                    controlsInteractionTrigger = System.currentTimeMillis()
+                                }
+                            }
+                            .pointerInput(Unit) {
+                                detectTapGestures {
+                                    controlsInteractionTrigger = System.currentTimeMillis()
+                                }
+                            }
+                    ) {
+                        // Top controls background
+                        Box(modifier = Modifier
+                            .fillMaxWidth()
+                            .height(140.dp)
+                            .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.9f), Color.Transparent)))
+                            .align(Alignment.TopCenter)
+                        )
                     
                     // Top controls overlay
                     Column(
@@ -1666,6 +1705,7 @@ fun PlayerScreen(
                             }
                         }
                     }
+                }
 
                     androidx.compose.animation.AnimatedVisibility(
                         visible = showBrightnessSlider,
@@ -1728,13 +1768,30 @@ fun PlayerScreen(
                         }
                     }
 
-                    // Bottom controls background
-                    Box(modifier = Modifier
-                        .fillMaxWidth()
-                        .height(180.dp)
-                        .align(Alignment.BottomCenter)
-                        .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.9f))))
-                    )
+                    // Bottom controls container (traps taps so controls remain visible)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.BottomCenter)
+                            .pointerInput(Unit) {
+                                awaitEachGesture {
+                                    awaitFirstDown(requireUnconsumed = false)
+                                    controlsInteractionTrigger = System.currentTimeMillis()
+                                }
+                            }
+                            .pointerInput(Unit) {
+                                detectTapGestures {
+                                    controlsInteractionTrigger = System.currentTimeMillis()
+                                }
+                            }
+                    ) {
+                        // Bottom controls background
+                        Box(modifier = Modifier
+                            .fillMaxWidth()
+                            .height(180.dp)
+                            .align(Alignment.BottomCenter)
+                            .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.9f))))
+                        )
 
                     // Bottom controls overlay
                     Column(
@@ -1964,6 +2021,7 @@ fun PlayerScreen(
                             }
                         }
                     }
+                }
                 }
             }
         }

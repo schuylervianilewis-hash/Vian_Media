@@ -46,29 +46,30 @@ fun AppNavigation(initialUris: List<String> = emptyList(), forceAction: String? 
             val isAudio = mimeType?.startsWith("audio/") == true || ext in listOf("mp3", "wav", "ogg", "m4a", "flac", "aac")
             val isVideo = mimeType?.startsWith("video/") == true || ext in listOf("mp4", "mkv", "webm", "avi", "3gp", "mov", "flv", "wmv", "m4v", "m4s", "m3u8", "ts")
             
+            val base64Flags = android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING
             if (forceAction == "mini" || forceAction == "pip" || forceAction == "none") {
                 null
             } else if (forceAction == "play" || forceAction == "com.example.ACTION_OPEN_PLAYER") {
-                val encodedUri = android.util.Base64.encodeToString(initialUris.first().toByteArray(), android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP)
+                val encodedUri = android.util.Base64.encodeToString(initialUris.first().toByteArray(), base64Flags)
                 "player/$encodedUri"
             } else if (forceAction == "edit") {
-                val encodedUri = android.util.Base64.encodeToString(initialUris.first().toByteArray(), android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP)
+                val encodedUri = android.util.Base64.encodeToString(initialUris.first().toByteArray(), base64Flags)
                 if (isAudio) "audio_trimmer/$encodedUri"
                 else if (isVideo) "video_editor/$encodedUri"
                 else if (isAnimatedImage) "video_editor/$encodedUri"
                 else "photo_editor/$encodedUri"
             } else if (isImage) {
                 if (initialUris.size == 1 && !isAnimatedImage) {
-                    val encodedUri = android.util.Base64.encodeToString(initialUris.first().toByteArray(), android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP)
+                    val encodedUri = android.util.Base64.encodeToString(initialUris.first().toByteArray(), base64Flags)
                     "photo_editor/$encodedUri"
                 } else if (initialUris.size == 1 && isAnimatedImage) {
-                    val encodedUri = android.util.Base64.encodeToString(initialUris.first().toByteArray(), android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP)
+                    val encodedUri = android.util.Base64.encodeToString(initialUris.first().toByteArray(), base64Flags)
                     "player/$encodedUri"
                 } else {
                     "main"
                 }
             } else {
-                val encodedUri = android.util.Base64.encodeToString(initialUris.first().toByteArray(), android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP)
+                val encodedUri = android.util.Base64.encodeToString(initialUris.first().toByteArray(), base64Flags)
                 "player/$encodedUri"
             }
         } else null
@@ -76,9 +77,13 @@ fun AppNavigation(initialUris: List<String> = emptyList(), forceAction: String? 
 
     androidx.compose.runtime.LaunchedEffect(intentDest) {
         if (intentDest != null) {
-            navController.navigate(intentDest) {
-                popUpTo(startDest) { inclusive = false }
-                launchSingleTop = true
+            try {
+                navController.navigate(intentDest) {
+                    popUpTo(startDest) { inclusive = false }
+                    launchSingleTop = true
+                }
+            } catch (e: Exception) {
+                com.example.LogKeeper.logError("Navigation", "Failed to navigate to intent destination: $intentDest", e)
             }
         }
     }
@@ -112,8 +117,7 @@ fun AppNavigation(initialUris: List<String> = emptyList(), forceAction: String? 
         }
     }
 
-    val initialRoute = remember { intentDest ?: startDest }
-    NavHost(navController = navController, startDestination = initialRoute) {
+    NavHost(navController = navController, startDestination = startDest) {
         composable("welcome") {
             WelcomeScreen(
                 onPermissionsGranted = {

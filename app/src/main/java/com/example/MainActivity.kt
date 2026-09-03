@@ -79,22 +79,30 @@ class MainActivity : ComponentActivity() {
   private fun persistUriPermissions(intent: android.content.Intent?) {
       if (intent == null) return
       val uris = mutableListOf<android.net.Uri>()
-      intent.data?.let { uris.add(it) }
-      (intent.getParcelableExtra<android.os.Parcelable>(android.content.Intent.EXTRA_STREAM) as? android.net.Uri)?.let {
-          uris.add(it)
-      }
-      val clipData = intent.clipData
-      if (clipData != null && clipData.itemCount > 0) {
-          for (i in 0 until clipData.itemCount) {
-              clipData.getItemAt(i)?.uri?.let { uris.add(it) }
+      try {
+          intent.data?.let { uris.add(it) }
+      } catch (e: Exception) {}
+      try {
+          (intent.getParcelableExtra<android.os.Parcelable>(android.content.Intent.EXTRA_STREAM) as? android.net.Uri)?.let {
+              uris.add(it)
           }
-      }
-      val arrayList = intent.getParcelableArrayListExtra<android.os.Parcelable>(android.content.Intent.EXTRA_STREAM)
-      if (arrayList != null) {
-          for (parcel in arrayList) {
-              (parcel as? android.net.Uri)?.let { uris.add(it) }
+      } catch (e: Exception) {}
+      try {
+          val clipData = intent.clipData
+          if (clipData != null && clipData.itemCount > 0) {
+              for (i in 0 until clipData.itemCount) {
+                  clipData.getItemAt(i)?.uri?.let { uris.add(it) }
+              }
           }
-      }
+      } catch (e: Exception) {}
+      try {
+          val arrayList = intent.getParcelableArrayListExtra<android.os.Parcelable>(android.content.Intent.EXTRA_STREAM)
+          if (arrayList != null) {
+              for (parcel in arrayList) {
+                  (parcel as? android.net.Uri)?.let { uris.add(it) }
+              }
+          }
+      } catch (e: Exception) {}
       for (uri in uris) {
           if (uri.scheme == "content") {
               try {
@@ -115,27 +123,35 @@ class MainActivity : ComponentActivity() {
       if (!isMini && !isPip) return false
 
       val uris = mutableListOf<String>()
-      intent.data?.let { uris.add(it.toString()) }
+      try {
+          intent.data?.let { uris.add(it.toString()) }
+      } catch (e: Exception) {}
       if (uris.isEmpty()) {
-          (intent.getParcelableExtra<android.os.Parcelable>(android.content.Intent.EXTRA_STREAM) as? android.net.Uri)?.let {
-              uris.add(it.toString())
-          }
+          try {
+              (intent.getParcelableExtra<android.os.Parcelable>(android.content.Intent.EXTRA_STREAM) as? android.net.Uri)?.let {
+                  uris.add(it.toString())
+              }
+          } catch (e: Exception) {}
       }
       if (uris.isEmpty()) {
-          val clipData = intent.clipData
-          if (clipData != null && clipData.itemCount > 0) {
-              for (i in 0 until clipData.itemCount) {
-                  clipData.getItemAt(i)?.uri?.let { uris.add(it.toString()) }
+          try {
+              val clipData = intent.clipData
+              if (clipData != null && clipData.itemCount > 0) {
+                  for (i in 0 until clipData.itemCount) {
+                      clipData.getItemAt(i)?.uri?.let { uris.add(it.toString()) }
+                  }
               }
-          }
+          } catch (e: Exception) {}
       }
       if (uris.isEmpty()) {
-          val arrayList = intent.getParcelableArrayListExtra<android.os.Parcelable>(android.content.Intent.EXTRA_STREAM)
-          if (arrayList != null) {
-              for (parcel in arrayList) {
-                  (parcel as? android.net.Uri)?.let { uris.add(it.toString()) }
+          try {
+              val arrayList = intent.getParcelableArrayListExtra<android.os.Parcelable>(android.content.Intent.EXTRA_STREAM)
+              if (arrayList != null) {
+                  for (parcel in arrayList) {
+                      (parcel as? android.net.Uri)?.let { uris.add(it.toString()) }
+                  }
               }
-          }
+          } catch (e: Exception) {}
       }
 
       if (uris.isEmpty()) return false
@@ -268,32 +284,44 @@ class MainActivity : ComponentActivity() {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
-    persistUriPermissions(intent)
-    if (handlePopupOrMiniIntent(intent)) {
-        return
+    LogKeeper.init(this)
+    try {
+        persistUriPermissions(intent)
+        if (handlePopupOrMiniIntent(intent)) {
+            return
+        }
+    } catch (e: Exception) {
+        LogKeeper.logError("MainActivity", "Error handling startup intent", e)
     }
     val filter = android.content.IntentFilter("com.example.ACTION_ENTER_PIP")
-    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-        registerReceiver(pipReceiver, filter, android.content.Context.RECEIVER_NOT_EXPORTED)
-    } else {
-        registerReceiver(pipReceiver, filter)
+    try {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(pipReceiver, filter, android.content.Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(pipReceiver, filter)
+        }
+    } catch (e: Exception) {
+        LogKeeper.logError("MainActivity", "Error registering pipReceiver", e)
     }
     
-    coil.Coil.setImageLoader(
-        coil.ImageLoader.Builder(this)
-            .components {
-                add(com.example.VideoThumbnailFetcher.Factory())
-            }
-            .memoryCache {
-                coil.memory.MemoryCache.Builder(this)
-                    .maxSizePercent(0.15)
-                    .build()
-            }
-            .crossfade(true)
-            .build()
-    )
+    try {
+        coil.Coil.setImageLoader(
+            coil.ImageLoader.Builder(this)
+                .components {
+                    add(com.example.VideoThumbnailFetcher.Factory())
+                }
+                .memoryCache {
+                    coil.memory.MemoryCache.Builder(this)
+                        .maxSizePercent(0.15)
+                        .build()
+                }
+                .crossfade(true)
+                .build()
+        )
+    } catch (e: Exception) {
+        LogKeeper.logError("MainActivity", "Error initializing Coil ImageLoader", e)
+    }
 
-    LogKeeper.init(this)
     com.example.data.CacheManager.purgeOrphanedTempFiles(this)
     enableEdgeToEdge(
         statusBarStyle = androidx.activity.SystemBarStyle.light(
@@ -334,36 +362,46 @@ class MainActivity : ComponentActivity() {
                   }
               } else if (currentIntent?.action == android.content.Intent.ACTION_VIEW || currentIntent?.action == "edit") {
                 val uris = mutableListOf<String>()
-                currentIntent?.data?.let { uri ->
-                  uris.add(uri.toString())
-                }
-                if (uris.isEmpty()) {
-                  (currentIntent?.getParcelableExtra<android.os.Parcelable>(android.content.Intent.EXTRA_STREAM) as? android.net.Uri)?.let { uri ->
-                    uris.add(uri.toString())
-                  }
-                }
-                if (uris.isEmpty()) {
-                    val clipData = currentIntent?.clipData
-                    if (clipData != null && clipData.itemCount > 0) {
-                        clipData.getItemAt(0)?.uri?.let { uri ->
-                            uris.add(uri.toString())
-                        }
+                try {
+                    currentIntent?.data?.let { uri ->
+                      uris.add(uri.toString())
                     }
+                } catch (e: Exception) {}
+                if (uris.isEmpty()) {
+                  try {
+                      (currentIntent?.getParcelableExtra<android.os.Parcelable>(android.content.Intent.EXTRA_STREAM) as? android.net.Uri)?.let { uri ->
+                        uris.add(uri.toString())
+                      }
+                  } catch (e: Exception) {}
+                }
+                if (uris.isEmpty()) {
+                    try {
+                        val clipData = currentIntent?.clipData
+                        if (clipData != null && clipData.itemCount > 0) {
+                            clipData.getItemAt(0)?.uri?.let { uri ->
+                                uris.add(uri.toString())
+                            }
+                        }
+                    } catch (e: Exception) {}
                 }
                 initialUris = uris
               } else if (currentIntent?.action == android.content.Intent.ACTION_SEND) {
-                (currentIntent?.getParcelableExtra<android.os.Parcelable>(android.content.Intent.EXTRA_STREAM) as? android.net.Uri)?.let { uri ->
-                  initialUris = listOf(uri.toString())
-                }
-              } else if (currentIntent?.action == android.content.Intent.ACTION_SEND_MULTIPLE) {
-                val arrayList = currentIntent?.getParcelableArrayListExtra<android.os.Parcelable>(android.content.Intent.EXTRA_STREAM)
-                if (arrayList != null) {
-                    val uris = mutableListOf<String>()
-                    for (parcel in arrayList) {
-                        (parcel as? android.net.Uri)?.let { uris.add(it.toString()) }
+                try {
+                    (currentIntent?.getParcelableExtra<android.os.Parcelable>(android.content.Intent.EXTRA_STREAM) as? android.net.Uri)?.let { uri ->
+                      initialUris = listOf(uri.toString())
                     }
-                    initialUris = uris
-                }
+                } catch (e: Exception) {}
+              } else if (currentIntent?.action == android.content.Intent.ACTION_SEND_MULTIPLE) {
+                try {
+                    val arrayList = currentIntent?.getParcelableArrayListExtra<android.os.Parcelable>(android.content.Intent.EXTRA_STREAM)
+                    if (arrayList != null) {
+                        val uris = mutableListOf<String>()
+                        for (parcel in arrayList) {
+                            (parcel as? android.net.Uri)?.let { uris.add(it.toString()) }
+                        }
+                        initialUris = uris
+                    }
+                } catch (e: Exception) {}
               }
               
               val forceAction = currentIntent?.component?.className?.let { className ->

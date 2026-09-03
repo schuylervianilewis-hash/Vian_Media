@@ -39,6 +39,7 @@ object LogKeeper {
     private const val PREFS_NAME = "log_keeper_prefs"
     private const val KEY_LOGGER_ENABLED = "logger_enabled"
     private lateinit var prefs: SharedPreferences
+    private lateinit var appContext: Context
 
     private val _isEnabled = MutableStateFlow(true)
     val isEnabled: StateFlow<Boolean> = _isEnabled.asStateFlow()
@@ -47,13 +48,15 @@ object LogKeeper {
     val logs: StateFlow<List<LogEntry>> = _logs.asStateFlow()
 
     fun init(context: Context) {
-        prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        if (::appContext.isInitialized) return
+        appContext = context.applicationContext
+        prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         _isEnabled.value = prefs.getBoolean(KEY_LOGGER_ENABLED, true)
 
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             logError("CRASH", "Uncaught exception in thread ${thread.name}", throwable)
-            dumpCrash(context, throwable)
+            dumpCrash(appContext, throwable)
             defaultHandler?.uncaughtException(thread, throwable)
         }
         
@@ -63,7 +66,9 @@ object LogKeeper {
     fun toggleLogger() {
         val newState = !_isEnabled.value
         _isEnabled.value = newState
-        prefs.edit().putBoolean(KEY_LOGGER_ENABLED, newState).apply()
+        if (::prefs.isInitialized) {
+            prefs.edit().putBoolean(KEY_LOGGER_ENABLED, newState).apply()
+        }
         log("Logger state changed to: $newState", "System")
     }
 
@@ -95,25 +100,74 @@ object LogKeeper {
         _logs.value = newList
     }
 
-    private fun dumpCrash(context: Context, throwable: Throwable) {
-        if (!_isEnabled.value) return
+    private fun writeToDownloads(context: Context, fileName: String, content: String): Boolean {
+        var success = false
         try {
-            val dateStr = SimpleDateFormat("yyyy-MM-dd_HHmm", Locale.US).format(Date())
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                val resolver = context.contentResolver
+                val contentValues = android.content.ContentValues().apply {
+                    put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                    put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/plain")
+                    put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS)
+                }
+                val uri = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+                if (uri != null) {
+                    resolver.openOutputStream(uri)?.use { stream ->
+                        stream.write(content.toByteArray(Charsets.UTF_8))
+                        stream.flush()
+                    }
+                    success = true
+                    Log.d(TAG, "Successfully written to MediaStore.Downloads: $fileName")
+                }
+            } else {
+                val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+                if (!downloadsDir.exists()) downloadsDir.mkdirs()
+                val file = java.io.File(downloadsDir, fileName)
+                file.writeText(content)
+                success = true
+                Log.d(TAG, "Successfully written to external storage Downloads: ${file.absolutePath}")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed writing to primary Downloads: ${e.message}", e)
+        }
+
+        // Failsafe backup to app-specific external files dir (never requires storage permission)
+        try {
+            val appDownloads = context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS)
+            if (appDownloads != null) {
+                if (!appDownloads.exists()) appDownloads.mkdirs()
+                val backupFile = java.io.File(appDownloads, fileName)
+                backupFile.writeText(content)
+                Log.d(TAG, "Backup written to app external downloads: ${backupFile.absolutePath}")
+                success = true
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed writing to backup app downloads: ${e.message}", e)
+        }
+
+        return success
+    }
+
+    private fun dumpCrash(context: Context, throwable: Throwable) {
+        try {
+            val dateStr = SimpleDateFormat("yyyy-MM-dd_HHmmss", Locale.US).format(Date())
             val fileName = "Vianbrplay_crash_$dateStr.txt"
-            
-            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-            if (!downloadsDir.exists()) downloadsDir.mkdirs()
-            
-            val file = File(downloadsDir, fileName)
+            val recentLogs = _logs.value.joinToString("\n") { it.formattedString }
             val crashData = """
-                Crash Dump - $dateStr
+                ==============================
+                Vianbrplay Crash Dump - $dateStr
                 Message: ${throwable.message}
+                ==============================
                 Stacktrace:
                 ${Log.getStackTraceString(throwable)}
+                ==============================
+                Recent Logs (${_logs.value.size} entries):
+                $recentLogs
+                ==============================
             """.trimIndent()
             
-            file.writeText(crashData)
-            Log.d(TAG, "Crash dumped to: ${'$'}{file.absolutePath}")
+            val written = writeToDownloads(context, fileName, crashData)
+            Log.d(TAG, "Crash dumped: $written ($fileName)")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to write crash dump", e)
         }
@@ -122,17 +176,18 @@ object LogKeeper {
     fun dumpCurrentLogs(context: Context) {
         if (!_isEnabled.value) return
         try {
-            val dateStr = SimpleDateFormat("yyyy-MM-dd_HHmm", Locale.US).format(Date())
+            val dateStr = SimpleDateFormat("yyyy-MM-dd_HHmmss", Locale.US).format(Date())
             val fileName = "Vianbrplay_logs_$dateStr.txt"
+            val logsData = """
+                ==============================
+                Vianbrplay Log Export - $dateStr
+                Total Entries: ${_logs.value.size}
+                ==============================
+                ${_logs.value.joinToString("\n") { it.formattedString }}
+            """.trimIndent()
             
-            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-            if (!downloadsDir.exists()) downloadsDir.mkdirs()
-            
-            val file = File(downloadsDir, fileName)
-            val logsData = _logs.value.joinToString("\n") { it.formattedString }
-            
-            file.writeText(logsData)
-            log("Logs dumped to: ${file.absolutePath}", "System")
+            val written = writeToDownloads(context, fileName, logsData)
+            log("Logs dumped to Downloads: $written ($fileName)", "System")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to write logs dump", e)
         }

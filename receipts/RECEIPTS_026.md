@@ -215,3 +215,59 @@
 * Verification: local build only
 * Deviation: None
 * Known issues: None
+
+* Timestamp: 2026-09-03T03:38:30Z
+* Summary: Prevented top and bottom player control panels from hiding when tapped by capturing control area taps, consuming pointer events, and resetting the 4-second auto-hide inactivity timer.
+* Files touched:
+  - app/src/main/java/com/example/ui/screens/PlayerScreen.kt
+  - BLUEPRINT.md
+  - receipts/RECEIPTS_026.md
+* What was actually done:
+  - Added `controlsInteractionTrigger` state (`mutableLongStateOf(0L)`) in `PlayerScreen.kt`.
+  - Updated auto-hide `LaunchedEffect` key from `LaunchedEffect(showControls)` to `LaunchedEffect(showControls, controlsInteractionTrigger)`, causing any control interaction to cancel and reset the 4000ms auto-hide countdown.
+  - Wrapped the top controls background gradient and overlay column inside a dedicated top container `Box` with `pointerInput(Unit)` consuming taps (`detectTapGestures`) and resetting `controlsInteractionTrigger` on down gestures (`awaitFirstDown(requireUnconsumed = false)`).
+  - Wrapped the bottom controls background gradient and overlay column inside a dedicated bottom container `Box` with identical pointer event interception.
+* Verification: local build only
+* Deviation: None
+* Known issues: None
+
+* Timestamp: 2026-09-03T09:50:40Z
+* Summary: Converted player vertical volume swipe from discrete integer steps to continuous float ratio calculation, enabling smooth 1, 2, 3, 4 step progression.
+* Files touched:
+  - app/src/main/java/com/example/ui/screens/PlayerScreen.kt
+  - BLUEPRINT.md
+  - receipts/RECEIPTS_026.md
+* What was actually done:
+  - Replaced truncated integer volume quantization (`virtualNewVolume = (...).toInt()`) with continuous normalized float ratio tracking (`startVolumeRatio + volumeChange`).
+  - Added discrete threshold checking for `AudioManager.setStreamVolume` and `PlayerManager.applyAudioBoosterSettings` to only dispatch hardware updates when boundary values change.
+  - Linked `gestureVolumeRatio` and HUD text directly to the continuous ratio (`(currentRatio * 200).roundToInt()`), ensuring smooth step-by-step increments (1, 2, 3, 4...) and fluid vertical fill bar animations.
+* Verification: local build only
+* Deviation: None
+* Known issues: None
+
+* Timestamp: 2026-09-03T10:50:00Z
+* Summary: Hardened app launch and intent handling: Scoped Storage MediaStore LogKeeper dump, VianApplication early init, NavHost startDestination stabilization, unpadded Base64 encoding/decoding fallbacks, Room destructive migration, and safe MediaStore column index parsing.
+* Files touched:
+  - app/src/main/java/com/example/VianApplication.kt
+  - app/src/main/AndroidManifest.xml
+  - app/src/main/java/com/example/LogKeeper.kt
+  - app/src/main/java/com/example/MainActivity.kt
+  - app/src/main/java/com/example/ui/navigation/AppNavigation.kt
+  - app/src/main/java/com/example/ui/screens/PlayerScreen.kt
+  - app/src/main/java/com/example/data/AppDatabase.kt
+  - app/src/main/java/com/example/data/MediaRepository.kt
+  - BLUEPRINT.md
+  - receipts/RECEIPTS_026.md
+* What was actually done:
+  - Created `VianApplication` and registered it in `AndroidManifest.xml` to initialize `LogKeeper` before any Activity, Service, or ContentProvider starts.
+  - Refactored `LogKeeper.kt` to write crash dumps and log exports using `MediaStore.Downloads` API (API 29+) with a secondary failsafe write to `context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)`, completely bypassing legacy Scoped Storage `EACCES` permission blocks.
+  - Initialized `LogKeeper` at the very first line of `MainActivity.onCreate()` and wrapped intent extra parsing (`getParcelableExtra`, `getParcelableArrayListExtra`, `takePersistableUriPermission`) in `try/catch` to eliminate crashes caused by `BadParcelableException` and ungranted URI permissions.
+  - Fixed Jetpack Navigation Compose `NavHost` crashes when receiving external video intents by anchoring `startDestination` strictly to `startDest` (`main` or `welcome`) and routing via `LaunchedEffect(intentDest)` with `popUpTo(startDest) { inclusive = false }` and `launchSingleTop = true`.
+  - Updated Base64 URL route encoding across `AppNavigation.kt` to explicitly include `NO_PADDING` (`URL_SAFE or NO_WRAP or NO_PADDING`) and wrapped Base64 decoding in `PlayerScreen.kt` with a `try/catch` fallback to prevent route parser crashes.
+  - Added `.fallbackToDestructiveMigration()` in `AppDatabase.kt` to prevent SQLite startup lockout if local Room schemas mismatch.
+  - Replaced all `getColumnIndexOrThrow` calls in `MediaRepository.kt` with guarded `getColumnIndex` lookups checking for `-1` to safeguard against missing optional columns on OEM ROMs or SAF DocumentsContract queries.
+* Verification: not tested (APK builds happen via GitHub Actions CI after export; Android Gradle build tools not available in local container)
+* Deviation: None - Implemented the exact remediation plan finalized in the audit.
+* Known issues: None
+
+

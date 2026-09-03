@@ -89,40 +89,40 @@ class MediaRepository(private val context: Context) {
                 android.provider.MediaStore.Files.getContentUri("external"),
                 projection, null, null, null
             )?.use { cursor ->
-                val idCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.MediaColumns._ID)
-                val nameCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.MediaColumns.DISPLAY_NAME)
-                val durCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.MediaColumns.DURATION)
-                val dateCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.MediaColumns.DATE_MODIFIED)
-                val bucketIdCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.MediaColumns.BUCKET_ID)
-                val bucketNameCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.MediaColumns.BUCKET_DISPLAY_NAME)
-                val dataCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.MediaColumns.DATA)
-                val sizeCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.MediaColumns.SIZE)
-                val mimeCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.MediaColumns.MIME_TYPE)
+                val idCol = cursor.getColumnIndex(android.provider.MediaStore.MediaColumns._ID)
+                val nameCol = cursor.getColumnIndex(android.provider.MediaStore.MediaColumns.DISPLAY_NAME)
+                val durCol = cursor.getColumnIndex(android.provider.MediaStore.MediaColumns.DURATION)
+                val dateCol = cursor.getColumnIndex(android.provider.MediaStore.MediaColumns.DATE_MODIFIED)
+                val bucketIdCol = cursor.getColumnIndex(android.provider.MediaStore.MediaColumns.BUCKET_ID)
+                val bucketNameCol = cursor.getColumnIndex(android.provider.MediaStore.MediaColumns.BUCKET_DISPLAY_NAME)
+                val dataCol = cursor.getColumnIndex(android.provider.MediaStore.MediaColumns.DATA)
+                val sizeCol = cursor.getColumnIndex(android.provider.MediaStore.MediaColumns.SIZE)
+                val mimeCol = cursor.getColumnIndex(android.provider.MediaStore.MediaColumns.MIME_TYPE)
                 
                 val currentTime = System.currentTimeMillis()
                 val fifteenDaysMs = 15L * 24 * 60 * 60 * 1000
 
                 while (cursor.moveToNext()) {
-                    val bucketId = cursor.getString(bucketIdCol) ?: continue
-                    if (excludedFolders.contains(bucketId)) continue
+                    val bucketId = if (bucketIdCol != -1) cursor.getString(bucketIdCol) ?: "" else ""
+                    if (bucketId.isEmpty() || excludedFolders.contains(bucketId)) continue
 
-                    val dataPath = cursor.getString(dataCol) ?: ""
+                    val dataPath = if (dataCol != -1) cursor.getString(dataCol) ?: "" else ""
                     val isDefaultOutput = dataPath.lowercase().contains("/download/compressed")
                     val isCustomOutput = !customOutputSegment.isNullOrEmpty() && dataPath.lowercase().contains(customOutputSegment!!.lowercase())
                     if (isDefaultOutput || isCustomOutput) {
                         continue
                     }
 
-                    val name = cursor.getString(nameCol) ?: continue
+                    val name = if (nameCol != -1) cursor.getString(nameCol) ?: continue else continue
                     val ext = name.substringAfterLast('.', "").lowercase()
                     if (!exts.contains(ext) && !ext.isEmpty()) continue
 
-                    val id = cursor.getLong(idCol)
-                    val dur = cursor.getLong(durCol)
-                    val dateMs = cursor.getLong(dateCol) * 1000
-                    val bucketName = cursor.getString(bucketNameCol) ?: "Unknown Folder"
-                    val itemSize = cursor.getLong(sizeCol)
-                    val mimeType = cursor.getString(mimeCol) ?: ""
+                    val id = if (idCol != -1) cursor.getLong(idCol) else continue
+                    val dur = if (durCol != -1) cursor.getLong(durCol) else 0L
+                    val dateMs = if (dateCol != -1) cursor.getLong(dateCol) * 1000 else System.currentTimeMillis()
+                    val bucketName = if (bucketNameCol != -1) cursor.getString(bucketNameCol) ?: "Unknown Folder" else "Unknown Folder"
+                    val itemSize = if (sizeCol != -1) cursor.getLong(sizeCol) else 0L
+                    val mimeType = if (mimeCol != -1) cursor.getString(mimeCol) ?: "" else ""
 
                     val mediaType = when {
                         mimeType.startsWith("video/") || ext in listOf("mp4", "mkv", "webm", "avi", "3gp", "mov", "flv", "wmv", "m4v", "m4s", "m3u8", "ts") -> MediaType.VIDEO
@@ -220,18 +220,18 @@ class MediaRepository(private val context: Context) {
 
         try {
             context.contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
-                val idCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
-                val nameCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
-                val mimeCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE)
-                val sizeCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_SIZE)
-                val dateCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
+                val idCol = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+                val nameCol = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+                val mimeCol = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_MIME_TYPE)
+                val sizeCol = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_SIZE)
+                val dateCol = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
 
                 while (cursor.moveToNext()) {
-                    val docId = cursor.getString(idCol) ?: continue
-                    val name = cursor.getString(nameCol) ?: ""
-                    val mimeType = cursor.getString(mimeCol) ?: ""
-                    val size = cursor.getLong(sizeCol)
-                    val date = cursor.getLong(dateCol)
+                    val docId = if (idCol != -1) cursor.getString(idCol) ?: continue else continue
+                    val name = if (nameCol != -1) cursor.getString(nameCol) ?: "" else ""
+                    val mimeType = if (mimeCol != -1) cursor.getString(mimeCol) ?: "" else ""
+                    val size = if (sizeCol != -1) cursor.getLong(sizeCol) else 0L
+                    val date = if (dateCol != -1) cursor.getLong(dateCol) else 0L
 
                     if (date > latestDate) latestDate = date
 

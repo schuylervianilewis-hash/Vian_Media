@@ -11,7 +11,7 @@ android {
   compileSdk = 35
 
   defaultConfig {
-    applicationId = "com.shura.vianbrmedia.cecbba"
+    applicationId = "com.shura.vianbrmedia.iwhlom"
     minSdk = 24
     targetSdk = 35
     versionCode = 1
