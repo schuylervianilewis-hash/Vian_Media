@@ -8,12 +8,12 @@ plugins {
 
 android {
   namespace = "com.example"
-  compileSdk = 35
+  compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.shura.vianbrmedia.iwhlom"
+    applicationId = "com.shura.vianbrmedia.cecbba"
     minSdk = 24
-    targetSdk = 35
+    targetSdk = 36
     versionCode = 1
     versionName = "1.0"
 
@@ -48,10 +48,6 @@ android {
   buildFeatures {
     compose = true
     buildConfig = true
-  }
-  lint {
-    abortOnError = false
-    checkReleaseBuilds = false
   }
   testOptions { unitTests { isIncludeAndroidResources = true } }
 }
@@ -124,6 +120,14 @@ dependencies {
   debugImplementation(libs.androidx.compose.ui.tooling)
   "ksp"(libs.androidx.room.compiler)
 }
+
+kotlin {
+    sourceSets.all {
+        languageSettings.optIn("androidx.compose.material3.ExperimentalMaterial3Api")
+        languageSettings.optIn("androidx.compose.foundation.layout.ExperimentalLayoutApi")
+    }
+}
+
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
     compilerOptions {

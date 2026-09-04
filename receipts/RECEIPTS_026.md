@@ -270,4 +270,42 @@
 * Deviation: None - Implemented the exact remediation plan finalized in the audit.
 * Known issues: None
 
+* Timestamp: 2026-09-03T12:37:00Z
+* Summary: Completely removed VianApplication startup mechanism and manifest registration, retained LogKeeper.init(this) in MainActivity.onCreate(), kept all navigation, Room, and player logic untouched.
+* Files touched:
+  - app/src/main/java/com/example/VianApplication.kt (deleted)
+  - app/src/main/AndroidManifest.xml
+  - BLUEPRINT.md
+  - receipts/RECEIPTS_026.md
+* What was actually done:
+  - Deleted `/app/src/main/java/com/example/VianApplication.kt`.
+  - Removed `android:name=".VianApplication"` from `<application>` in `AndroidManifest.xml`.
+  - Verified `LogKeeper.init(this)` remains strictly at the start of `MainActivity.onCreate()` immediately following `super.onCreate(savedInstanceState)`.
+  - Preserved all other modules: Navigation Compose, Room, PlayerManager, dependencies, Gradle versions, and cache handling untouched as strictly instructed.
+* Verification: local build verified (compile_applet clean); APK artifact builds via GitHub Actions CI workflow after GitHub export.
+* Deviation: None
+* Known issues: None
+
+* Timestamp: 2026-09-04T00:46:00Z
+* Summary: Restored build, dependency, and toolchain configurations to match the working Viabhron-Core-Dev/Vianmedia repository exactly.
+* Files touched:
+  - gradle/libs.versions.toml
+  - app/build.gradle.kts
+  - gradle.properties
+  - .github/workflows/build.yml
+  - gradle/wrapper/gradle-wrapper.properties (deleted)
+  - BLUEPRINT.md
+  - receipts/RECEIPTS_026.md
+* What was actually done:
+  - Fetched and restored `gradle/libs.versions.toml` to match `Viabhron-Core-Dev/Vianmedia` exactly: AGP 9.1.1, Kotlin 2.2.10, composeBom 2024.09.00, coreKtx 1.18.0, activityCompose 1.10.1, navigationCompose 2.8.9, Room 2.7.0 (roomRuntime, roomKtx, roomCompiler), googleDevtoolsKsp 2.3.5, junitVersion 1.3.0, and espressoCore 3.7.0.
+  - Restored `app/build.gradle.kts` to match the old repo: `compileSdk { version = release(36) { minorApiLevel = 1 } }`, `targetSdk = 36`, `applicationId = "com.shura.vianbrmedia.cecbba"`, removed lint abortOnError blocks, and restored Kotlin compiler opt-ins.
+  - Restored `gradle.properties` (`org.gradle.configuration-cache=true`) and `.github/workflows/build.yml` (`gradle assembleDebug`).
+  - Removed `gradle/wrapper` directory to match the old repo where no wrapper configuration was tracked in git.
+  - Verified `settings.gradle.kts` and root `build.gradle.kts` have zero diff against the old working repo.
+  - Zero changes made to application code: MainActivity, AppNavigation, PlayerManager, LogKeeper, database, or media code remained completely untouched.
+* Verification: local build verified (compile_applet clean); no commit/push made per user mandate.
+* Deviation: None
+* Known issues: None
+
+
 
