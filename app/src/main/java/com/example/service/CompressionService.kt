@@ -142,10 +142,10 @@ class CompressionService : Service() {
                 LogKeeper.log("Batch compression cancelled/interrupted - halting loop.", "Compressor")
                 break
             }
+            val uri = Uri.parse(uriStr)
             var sourceBitmap: Bitmap? = null
             var outBitmap: Bitmap? = null
             try {
-                val uri = Uri.parse(uriStr)
                 
                 // Safely calculate sample size if downscaling is requested
                 val options = BitmapFactory.Options()

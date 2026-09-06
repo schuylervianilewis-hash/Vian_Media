@@ -287,7 +287,7 @@ fun PlayerScreen(
     val backgroundPlayEnabledRef = androidx.compose.runtime.rememberUpdatedState(backgroundPlayEnabled)
     val forceBackgroundPlay = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
 
-    var decoderRetryCount by remember { mutableIntStateOf(0) }
+    var decoderRetryCount by remember { androidx.compose.runtime.mutableIntStateOf(0) }
 
     val playerViewRef = remember { mutableStateOf<PlayerView?>(null) }
     androidx.activity.compose.BackHandler {
@@ -1801,15 +1801,10 @@ fun PlayerScreen(
                             .windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.systemBarsIgnoringVisibility.union(androidx.compose.foundation.layout.WindowInsets.displayCutout).only(androidx.compose.foundation.layout.WindowInsetsSides.Horizontal + androidx.compose.foundation.layout.WindowInsetsSides.Bottom))
                             .padding(bottom = 4.dp)
                     ) {
-                        val savedState = remember(decodedUriString) {
-                            com.example.data.SettingsManager.getInstance(context).getPlaybackState(decodedUriString)
-                        }
                         com.example.ui.screens.PlaybackProgressRow(
                             mediaController = mediaController,
                             abRepeatStart = abRepeatStart,
                             abRepeatEnd = abRepeatEnd,
-                            fallbackDuration = savedState?.duration?.takeIf { it > 0L },
-                            fallbackPosition = savedState?.position?.takeIf { it > 0L },
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
                         )
                         
