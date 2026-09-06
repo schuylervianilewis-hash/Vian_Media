@@ -14,11 +14,12 @@ Verification: local build only (compile_applet passed)
 Deviation: None
 Follow-up: Push to GitHub repository to trigger the automated CI APK build.
 
-2026-09-06T11:40:00Z
-Requested: Implement Android share multi-select, dynamic queue appending, and temp playlist auto-save with next-day passive cleanup
-Files touched: app/src/main/java/com/example/MainActivity.kt, app/src/main/java/com/example/ui/screens/PlayerScreen.kt, app/src/main/java/com/example/ui/screens/PlaylistsScreen.kt, app/src/main/java/com/example/ui/screens/PlaylistDetailScreen.kt, receipts/RECEIPTS_001.md
-Action: Updated MainActivity.kt to merge all incoming URIs from intent.data, EXTRA_STREAM, clipData, and EXTRA_STREAM array list into an ordered LinkedHashSet. Implemented dynamic queue appending when ExoPlayer is already active (via player.addMediaItems). Added auto-saving of the active queue to "Quick Play (Temporary)" in Room. Propagated FLAG_GRANT_READ_URI_PERMISSION to PlaybackService foreground intents. Added passive on-launch janitor in MainActivity.onCreate to purge temporary playlists older than 24 hours. Integrated Save/Keep action in PlaylistDetailScreen and 24h expiration badge in PlaylistsScreen.
-Verification: local build only
+2026-09-06T12:56:30Z
+Requested: Fix GitHub Actions CI APK build failure at mergeDebugNativeLibs under Gradle 9.7.1
+Files touched: .github/workflows/build.yml, app/build.gradle.kts, BLUEPRINT.md, receipts/RECEIPTS_001.md
+Action: Configured gradle/actions/setup-gradle@v3 with pinned gradle-version '8.11.1' in .github/workflows/build.yml to prevent CI runner from defaulting to Gradle 9.7.1 CLI. Stabilized compileSdk and targetSdk to API 35 in app/build.gradle.kts. Added packaging.jniLibs pickFirsts rules in app/build.gradle.kts for libc++_shared.so and ffmpeg shared native libraries to resolve duplicate .so collisions during :app:mergeDebugNativeLibs.
+Verification: local build only (compile_applet passed)
 Deviation: None
-Follow-up: Test on Android device by sharing single and multiple mixed audio/video files via system share sheet to Mini Player.
+Follow-up: Push to GitHub repository to trigger the automated CI APK build.
+
 
