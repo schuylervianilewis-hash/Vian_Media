@@ -14,12 +14,13 @@ Verification: local build only (compile_applet passed)
 Deviation: None
 Follow-up: Push to GitHub repository to trigger the automated CI APK build.
 
-2026-09-06T12:56:30Z
-Requested: Fix GitHub Actions CI APK build failure at mergeDebugNativeLibs under Gradle 9.7.1
-Files touched: .github/workflows/build.yml, app/build.gradle.kts, BLUEPRINT.md, receipts/RECEIPTS_001.md
-Action: Configured gradle/actions/setup-gradle@v3 with pinned gradle-version '8.11.1' in .github/workflows/build.yml to prevent CI runner from defaulting to Gradle 9.7.1 CLI. Stabilized compileSdk and targetSdk to API 35 in app/build.gradle.kts. Added packaging.jniLibs pickFirsts rules in app/build.gradle.kts for libc++_shared.so and ffmpeg shared native libraries to resolve duplicate .so collisions during :app:mergeDebugNativeLibs.
+2026-09-06T13:41:00Z
+Requested: Restore GitHub Actions CI pipeline to known-good Gradle 9.7.1 and change visible app name to Vian Media
+Files touched: .github/workflows/build.yml, app/src/main/res/values/strings.xml, receipts/RECEIPTS_001.md
+Action: Restored gradle-version to '9.7.1' in .github/workflows/build.yml to match successful Run #21 baseline for AGP 9.1.1. Changed visible app_name in app/src/main/res/values/strings.xml from 'Vian Media TEST' to 'Vian Media' while keeping applicationId strictly as 'com.shura.vianbrmedia.cecbba.test'. Did not touch any application source code. Did not commit or push to GitHub.
 Verification: local build only (compile_applet passed)
 Deviation: None
-Follow-up: Push to GitHub repository to trigger the automated CI APK build.
+Follow-up: Awaiting user instruction before any Git commit/push or application source-code investigation.
+
 
 
