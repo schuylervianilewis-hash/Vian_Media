@@ -9,9 +9,8 @@ import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,13 +34,23 @@ fun FloatingVideoPlayerOverlay(
     onDrag: (Float, Float) -> Unit,
     onResize: (Float, Float) -> Unit,
     onOpenMainPlayer: () -> Unit,
-    onSwitchToMiniPlayer: () -> Unit
+    onSwitchToMiniPlayer: () -> Unit,
+    onAspectRatioChanged: (Float) -> Unit = {}
 ) {
     var title by remember { mutableStateOf(player?.currentMediaItem?.mediaMetadata?.title?.toString() ?: "Unknown") }
     var isPlaying by remember { mutableStateOf(player?.isPlaying == true) }
+    var repeatMode by remember { mutableIntStateOf(player?.repeatMode ?: Player.REPEAT_MODE_OFF) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val settingsManager = remember { com.example.data.SettingsManager.getInstance(context) }
     val keepScreenAwake by settingsManager.keepScreenAwake.collectAsState()
+
+    LaunchedEffect(player) {
+        player?.videoSize?.let { vs ->
+            if (vs.width > 0 && vs.height > 0) {
+                onAspectRatioChanged(vs.width.toFloat() / vs.height.toFloat())
+            }
+        }
+    }
 
     DisposableEffect(player) {
         if (player == null) return@DisposableEffect onDispose {}
@@ -51,6 +60,14 @@ fun FloatingVideoPlayerOverlay(
             }
             override fun onIsPlayingChanged(isPlayingChange: Boolean) {
                 isPlaying = isPlayingChange
+            }
+            override fun onRepeatModeChanged(mode: Int) {
+                repeatMode = mode
+            }
+            override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+                if (videoSize.width > 0 && videoSize.height > 0) {
+                    onAspectRatioChanged(videoSize.width.toFloat() / videoSize.height.toFloat())
+                }
             }
         }
         player.addListener(listener)
@@ -85,7 +102,7 @@ fun FloatingVideoPlayerOverlay(
                             onDoubleTap = { onOpenMainPlayer() }
                         )
                     }
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                    .padding(horizontal = 8.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(Icons.Filled.DragIndicator, contentDescription = "Drag", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
@@ -98,6 +115,17 @@ fun FloatingVideoPlayerOverlay(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
+                IconButton(
+                    onClick = onSwitchToMiniPlayer,
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.PlaylistPlay,
+                        contentDescription = "Switch to Mini Player",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
 
             // Video Player
@@ -115,9 +143,15 @@ fun FloatingVideoPlayerOverlay(
                             PlayerView(ctx).apply {
                                 this.player = player
                                 useController = false
+                                resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                                setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
                             }
                         },
                         update = { view ->
+                            if (view.player != player) {
+                                view.player = player
+                            }
+                            view.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
                             view.keepScreenOn = keepScreenAwake && isPlaying
                         },
                         modifier = Modifier.fillMaxSize().pointerInput(Unit) {
@@ -142,17 +176,17 @@ fun FloatingVideoPlayerOverlay(
                                 modifier = Modifier
                                     .align(Alignment.BottomCenter)
                                     .fillMaxWidth()
-                                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                                    .padding(start = 4.dp, end = 4.dp, bottom = 0.dp)
                             ) {
                                 com.example.ui.screens.PlaybackProgressRow(
                                     mediaController = player,
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 0.dp)
                                 )
                                 
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                                        .padding(start = 4.dp, end = 4.dp, top = 0.dp, bottom = 2.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     // Left/Center Playback controls
@@ -222,6 +256,30 @@ fun FloatingVideoPlayerOverlay(
                                                 imageVector = Icons.Filled.SkipNext,
                                                 contentDescription = "Next",
                                                 tint = Color.White,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+
+                                        IconButton(
+                                            onClick = {
+                                                player?.let { controller ->
+                                                    val nextMode = when (controller.repeatMode) {
+                                                        Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                                                        Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                                                        else -> Player.REPEAT_MODE_OFF
+                                                    }
+                                                    controller.repeatMode = nextMode
+                                                    repeatMode = nextMode
+                                                }
+                                            },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            val loopIcon = if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Filled.RepeatOne else Icons.Filled.Repeat
+                                            val loopTint = if (repeatMode != Player.REPEAT_MODE_OFF) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.7f)
+                                            Icon(
+                                                imageVector = loopIcon,
+                                                contentDescription = "Loop Mode",
+                                                tint = loopTint,
                                                 modifier = Modifier.size(20.dp)
                                             )
                                         }

@@ -380,6 +380,41 @@ val prefs = getSharedPreferences("MiniPlayerPrefs", android.content.Context.MODE
 cv.setContent {
 var isMinimized by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 var isVideoMode by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(startInVideoMode) }
+var videoAspectRatio by androidx.compose.runtime.remember { androidx.compose.runtime.mutableFloatStateOf(16f / 9f) }
+
+val updateWindowForAspectRatio: (Float) -> Unit = { aspect ->
+    if (aspect > 0.2f && aspect < 5.0f) {
+        videoAspectRatio = aspect
+        val lp = layoutParams
+        val currentCv = composeView
+        if (lp != null && currentCv != null && isVideoMode) {
+            val metrics = resources.displayMetrics
+            val topBarHeightPx = (32 * metrics.density).toInt()
+            val minWidth = (200 * metrics.density).toInt()
+            val maxWidth = (metrics.widthPixels * 0.95f).toInt()
+            val maxHeight = (metrics.heightPixels * 0.7f).toInt()
+
+            var targetWidth = lp.width.coerceIn(minWidth, maxWidth)
+            var targetHeight = ((targetWidth) / aspect).toInt() + topBarHeightPx
+
+            if (targetHeight > maxHeight) {
+                targetHeight = maxHeight
+                targetWidth = (((targetHeight - topBarHeightPx) * aspect).toInt()).coerceIn(minWidth, maxWidth)
+            }
+
+            if (lp.width != targetWidth || lp.height != targetHeight) {
+                lp.width = targetWidth
+                lp.height = targetHeight
+                try {
+                    windowManager.updateViewLayout(currentCv, lp)
+                    prefs.edit().putInt("width", lp.width).putInt("height", lp.height).apply()
+                } catch (e: Exception) {
+                    com.example.LogKeeper.logError("PlaybackService", "Error updating popup aspect ratio", e)
+                }
+            }
+        }
+    }
+}
 
 com.example.ui.theme.MyApplicationTheme {
 if (isVideoMode) {
@@ -405,8 +440,21 @@ prefs.edit().putInt("x", lp.x).putInt("y", lp.y).apply()
 onResize = { dw, dh ->
 val lp = layoutParams
 if (lp != null) {
-lp.width = (lp.width + dw.toInt()).coerceAtLeast(400)
-lp.height = (lp.height + dh.toInt()).coerceAtLeast(400)
+val metrics = resources.displayMetrics
+val topBarHeightPx = (32 * metrics.density).toInt()
+val minWidth = (200 * metrics.density).toInt()
+val maxWidth = (metrics.widthPixels * 0.95f).toInt()
+val maxHeight = (metrics.heightPixels * 0.7f).toInt()
+
+val aspect = videoAspectRatio.coerceIn(0.4f, 2.5f)
+val newWidth = (lp.width + dw.toInt()).coerceIn(minWidth, maxWidth)
+var newHeight = ((newWidth) / aspect).toInt() + topBarHeightPx
+if (newHeight > maxHeight) {
+    newHeight = maxHeight
+}
+
+lp.width = newWidth
+lp.height = newHeight
 windowManager.updateViewLayout(cv, lp)
 prefs.edit().putInt("width", lp.width).putInt("height", lp.height).apply()
 }
@@ -418,7 +466,17 @@ flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.
 startActivity(intent)
 hideOverlay()
 },
-onSwitchToMiniPlayer = { isVideoMode = false }
+onSwitchToMiniPlayer = {
+isVideoMode = false
+val lp = layoutParams
+if (lp != null) {
+    val metrics = resources.displayMetrics
+    lp.width = (300 * metrics.density).toInt()
+    lp.height = (200 * metrics.density).toInt()
+    windowManager.updateViewLayout(cv, lp)
+}
+},
+onAspectRatioChanged = updateWindowForAspectRatio
 )
 } else {
 com.example.ui.components.MiniPlayerOverlay(
@@ -467,7 +525,14 @@ lp.height = prefs.getInt("height", (200 * metrics.density).toInt())
 windowManager.updateViewLayout(cv, lp)
 }
 },
-onSwitchToVideo = { isVideoMode = true }
+onSwitchToVideo = {
+    isVideoMode = true
+    val player = com.example.service.PlayerManager.exoPlayer
+    val vs = player?.videoSize
+    if (vs != null && vs.width > 0 && vs.height > 0) {
+        updateWindowForAspectRatio(vs.width.toFloat() / vs.height.toFloat())
+    }
+}
 )
 }
 }
@@ -479,8 +544,18 @@ WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
 WindowManager.LayoutParams.TYPE_PHONE
 }
 val metrics = resources.displayMetrics
-val widthPx = prefs.getInt("width", (300 * metrics.density).toInt())
-val heightPx = prefs.getInt("height", (200 * metrics.density).toInt())
+val player = PlayerManager.exoPlayer
+val vs = player?.videoSize
+val initialAspect = if (vs != null && vs.width > 0 && vs.height > 0) {
+    vs.width.toFloat() / vs.height.toFloat()
+} else {
+    16f / 9f
+}
+val topBarHeightPx = (32 * metrics.density).toInt()
+val defaultWidth = (300 * metrics.density).toInt()
+val widthPx = prefs.getInt("width", defaultWidth)
+val initialHeight = ((widthPx) / initialAspect).toInt() + topBarHeightPx
+val heightPx = if (startInVideoMode && (vs != null && vs.width > 0)) initialHeight else prefs.getInt("height", (200 * metrics.density).toInt())
 layoutParams = WindowManager.LayoutParams(
 widthPx,
 heightPx,

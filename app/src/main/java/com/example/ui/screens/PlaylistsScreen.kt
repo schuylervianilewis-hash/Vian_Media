@@ -153,6 +153,19 @@ fun PlaylistsScreen(
                                 fontWeight = FontWeight.Bold,
                                 color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                            if (playlist.isTemporary || playlist.name.contains("Temp")) {
+                                Text(
+                                    "Expires 24h",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier
+                                        .background(
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                            RoundedCornerShape(4.dp)
+                                        )
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
                         }
                     }
                 }

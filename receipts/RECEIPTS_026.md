@@ -325,3 +325,39 @@
 * Deviation: None
 * Known issues: None
 
+* Timestamp: 2026-09-06T17:15:00Z
+* Summary: Added switch to mini player button, loop toggle, lowered seekbar/controls, and dynamic aspect ratio sizing in popup player overlay.
+* Files touched:
+  - app/src/main/java/com/example/ui/components/FloatingVideoPlayerOverlay.kt
+  - app/src/main/java/com/example/service/PlaybackService.kt
+  - BLUEPRINT.md
+  - receipts/RECEIPTS_026.md
+* What was actually done:
+  - Added an `IconButton` in `FloatingVideoPlayerOverlay.kt` topbar that triggers `onSwitchToMiniPlayer`, using `Icons.AutoMirrored.Filled.PlaylistPlay`.
+  - Added a loop toggle `IconButton` to the controls row directly after playback buttons (`SkipPrevious`, `Play/Pause`, `SkipNext`) under the seekbar, cycling `repeatMode` through `OFF` -> `ALL` -> `ONE` -> `OFF` and updating in real-time.
+  - Lowered playback buttons and seekbar in `FloatingVideoPlayerOverlay.kt` by tightening bottom alignment padding on the container `Column` (`bottom = 0.dp`), seekbar `PlaybackProgressRow` (`vertical = 0.dp`), and controls `Row` (`top = 0.dp, bottom = 2.dp`).
+  - Added dynamic video aspect ratio calculation and listener `onAspectRatioChanged` in `FloatingVideoPlayerOverlay.kt`, hooking into ExoPlayer's `videoSize` and `onVideoSizeChanged`.
+  - Updated `PlaybackService.kt` to dynamically adjust `WindowManager.LayoutParams` width and height according to video aspect ratio during playback, window resizing, and switching between mini and video player modes, as well as configuring `PlayerView.resizeMode = RESIZE_MODE_FIT`.
+* Verification: local build verified (compile_applet passed cleanly).
+* Deviation: None.
+* Known issues: None.
+
+* Timestamp: 2026-09-06T18:02:00Z
+* Summary: Split LogKeeper into lightweight catcher (LogCatcher) and decoupled viewer UI (LoggerScreen) with 2MB auto-dump to Downloads.
+* Files touched:
+  - app/src/main/java/com/example/LogCatcher.kt
+  - app/src/main/java/com/example/LogKeeper.kt
+  - app/src/main/java/com/example/ui/screens/LoggerScreen.kt
+  - BLUEPRINT.md
+  - receipts/RECEIPTS_026.md
+* What was actually done:
+  - Created headless `LogCatcher` engine managing persistent internal log file (`logs/active_session.log`) with thread-safe asynchronous disk writes dispatched on `Dispatchers.IO` to prevent main-thread UI stalls.
+  - Implemented 2MB threshold detector (`MAX_LOG_SIZE_BYTES = 2L * 1024 * 1024`). When active log reaches or exceeds 2MB, automatically exports content asynchronously to device `Downloads` folder via `MediaStore.Downloads` (`Vianbrplay_log_auto_YYYY-MM-DD_HHmmss.txt`), resets active file and buffer back to zero, and logs an automated audit entry.
+  - Retained lightweight in-memory ring-buffer (`ArrayDeque<LogEntry>` capped at 250 items) for instantaneous UI loading without holding multi-megabyte object trees in heap.
+  - Maintained complete backwards compatibility in `LogKeeper.kt` by delegating `log()`, `logWarn()`, `logError()`, `init()`, and master switch toggle to `LogCatcher`.
+  - Decoupled and enhanced `LoggerScreen.kt`: loads full log on-demand via `LogKeeper.loadAllLogs()`, displays real-time disk storage meter with percentage bar (`X.XX MB / 2.00 MB`), adds search text filtering across tags and stacktraces, adds confirmation dialog to clear logs, and enables manual export to Downloads.
+* Verification: local build verified (compile_applet passed cleanly).
+* Deviation: None.
+* Known issues: None.
+
+

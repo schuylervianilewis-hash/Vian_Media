@@ -552,31 +552,8 @@ fun PlayerScreen(
                     try {
                         val db = com.example.data.AppDatabase.getDatabase(context)
                         val playlistRepo = com.example.data.PlaylistRepository(db.playlistDao())
-                        val existingTemp = playlistRepo.allPlaylists.first().find { it.name == "Temp Current" }
-                        val tempPlaylistId = if (existingTemp != null) {
-                            existingTemp.id
-                        } else {
-                            val newPlaylist = com.example.data.Playlist(name = "Temp Current")
-                            playlistRepo.insertPlaylist(newPlaylist).toInt()
-                        }
-                        
-                        // clear existing items
-                        val existingItems = playlistRepo.getItemsForPlaylist(tempPlaylistId).first()
-                        for (item in existingItems) {
-                            playlistRepo.deletePlaylistItemById(item.id)
-                        }
-                        
-                        // insert new items
-                        val time = System.currentTimeMillis()
-                        for (i in playlistItems.indices) {
-                            val item = playlistItems[i]
-                            val pItem = com.example.data.PlaylistItem(
-                                playlistId = tempPlaylistId,
-                                mediaUri = item.mediaId,
-                                timestamp = time - i * 1000L // descending order
-                            )
-                            playlistRepo.insertPlaylistItem(pItem)
-                        }
+                        val uris = playlistItems.map { it.mediaId }
+                        playlistRepo.saveOrUpdateTemporaryPlaylist(uris, "Temp Current")
                     } catch(e: Exception) {
                         e.printStackTrace()
                     }

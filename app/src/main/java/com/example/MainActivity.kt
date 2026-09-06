@@ -122,38 +122,33 @@ class MainActivity : ComponentActivity() {
       val isPip = className.contains("PipMediaActivity")
       if (!isMini && !isPip) return false
 
-      val uris = mutableListOf<String>()
+      val uriSet = LinkedHashSet<String>()
       try {
-          intent.data?.let { uris.add(it.toString()) }
+          intent.data?.let { uriSet.add(it.toString()) }
       } catch (e: Exception) {}
-      if (uris.isEmpty()) {
-          try {
-              (intent.getParcelableExtra<android.os.Parcelable>(android.content.Intent.EXTRA_STREAM) as? android.net.Uri)?.let {
-                  uris.add(it.toString())
+      try {
+          (intent.getParcelableExtra<android.os.Parcelable>(android.content.Intent.EXTRA_STREAM) as? android.net.Uri)?.let {
+              uriSet.add(it.toString())
+          }
+      } catch (e: Exception) {}
+      try {
+          val clipData = intent.clipData
+          if (clipData != null && clipData.itemCount > 0) {
+              for (i in 0 until clipData.itemCount) {
+                  clipData.getItemAt(i)?.uri?.let { uriSet.add(it.toString()) }
               }
-          } catch (e: Exception) {}
-      }
-      if (uris.isEmpty()) {
-          try {
-              val clipData = intent.clipData
-              if (clipData != null && clipData.itemCount > 0) {
-                  for (i in 0 until clipData.itemCount) {
-                      clipData.getItemAt(i)?.uri?.let { uris.add(it.toString()) }
-                  }
+          }
+      } catch (e: Exception) {}
+      try {
+          val arrayList = intent.getParcelableArrayListExtra<android.os.Parcelable>(android.content.Intent.EXTRA_STREAM)
+          if (arrayList != null) {
+              for (parcel in arrayList) {
+                  (parcel as? android.net.Uri)?.let { uriSet.add(it.toString()) }
               }
-          } catch (e: Exception) {}
-      }
-      if (uris.isEmpty()) {
-          try {
-              val arrayList = intent.getParcelableArrayListExtra<android.os.Parcelable>(android.content.Intent.EXTRA_STREAM)
-              if (arrayList != null) {
-                  for (parcel in arrayList) {
-                      (parcel as? android.net.Uri)?.let { uris.add(it.toString()) }
-                  }
-              }
-          } catch (e: Exception) {}
-      }
+          }
+      } catch (e: Exception) {}
 
+      val uris = uriSet.toList()
       if (uris.isEmpty()) return false
 
       com.example.LogKeeper.log("handlePopupOrMiniIntent: isMini=$isMini, isPip=$isPip, urisCount=${uris.size}", "MainActivity")
@@ -175,13 +170,42 @@ class MainActivity : ComponentActivity() {
 
           com.example.service.PlayerManager.initialize(this, false)
           val player = com.example.service.PlayerManager.exoPlayer
-          player?.setMediaItems(mediaItems)
-          player?.prepare()
-          player?.play()
+          val hasActivePlayback = player != null && player.mediaItemCount > 0
+
+          if (player != null) {
+              if (hasActivePlayback) {
+                  player.addMediaItems(mediaItems)
+                  android.widget.Toast.makeText(this, "Added ${mediaItems.size} item(s) to queue", android.widget.Toast.LENGTH_SHORT).show()
+              } else {
+                  player.setMediaItems(mediaItems)
+                  player.prepare()
+                  player.play()
+              }
+          }
+
+          // Auto-save playlist snapshot to Room database
+          kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+              try {
+                  val allUris = mutableListOf<String>()
+                  if (player != null) {
+                      for (i in 0 until player.mediaItemCount) {
+                          player.getMediaItemAt(i).mediaId.let { allUris.add(it) }
+                      }
+                  } else {
+                      allUris.addAll(uris)
+                  }
+                  val db = com.example.data.AppDatabase.getDatabase(applicationContext)
+                  val playlistRepo = com.example.data.PlaylistRepository(db.playlistDao())
+                  playlistRepo.saveOrUpdateTemporaryPlaylist(allUris, "Quick Play (Temporary)")
+              } catch (e: Exception) {
+                  com.example.LogKeeper.logError("MainActivity", "Error auto-saving temporary playlist", e)
+              }
+          }
 
           if (android.provider.Settings.canDrawOverlays(this)) {
               val serviceIntent = android.content.Intent(this, com.example.service.PlaybackService::class.java).apply {
                   putExtra("command", "ACTION_MINIPLAYER")
+                  addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
               }
               if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                   startForegroundService(serviceIntent)
@@ -237,6 +261,7 @@ class MainActivity : ComponentActivity() {
 
               val serviceIntent = android.content.Intent(this, com.example.service.PlaybackService::class.java).apply {
                   putExtra("command", "ACTION_VIDEO_OVERLAY")
+                  addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
               }
               if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                   startForegroundService(serviceIntent)
@@ -323,6 +348,18 @@ class MainActivity : ComponentActivity() {
     }
 
     com.example.data.CacheManager.purgeOrphanedTempFiles(this)
+
+    // Passive on-launch janitor: Clean up temporary playlists older than 24 hours without continuous background services
+    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+        try {
+            val db = com.example.data.AppDatabase.getDatabase(applicationContext)
+            val playlistRepo = com.example.data.PlaylistRepository(db.playlistDao())
+            playlistRepo.cleanExpiredTemporaryPlaylists(24 * 60 * 60 * 1000L)
+        } catch (e: Exception) {
+            LogKeeper.logError("MainActivity", "Error cleaning expired temporary playlists", e)
+        }
+    }
+
     enableEdgeToEdge(
         statusBarStyle = androidx.activity.SystemBarStyle.light(
             android.graphics.Color.TRANSPARENT,
@@ -360,48 +397,37 @@ class MainActivity : ComponentActivity() {
                   if (currentMediaId != null) {
                       initialUris = listOf(currentMediaId)
                   }
-              } else if (currentIntent?.action == android.content.Intent.ACTION_VIEW || currentIntent?.action == "edit") {
-                val uris = mutableListOf<String>()
+              } else if (currentIntent?.action == android.content.Intent.ACTION_VIEW || currentIntent?.action == "edit" || currentIntent?.action == android.content.Intent.ACTION_SEND || currentIntent?.action == android.content.Intent.ACTION_SEND_MULTIPLE) {
+                val uriSet = LinkedHashSet<String>()
                 try {
                     currentIntent?.data?.let { uri ->
-                      uris.add(uri.toString())
+                      uriSet.add(uri.toString())
                     }
                 } catch (e: Exception) {}
-                if (uris.isEmpty()) {
-                  try {
-                      (currentIntent?.getParcelableExtra<android.os.Parcelable>(android.content.Intent.EXTRA_STREAM) as? android.net.Uri)?.let { uri ->
-                        uris.add(uri.toString())
-                      }
-                  } catch (e: Exception) {}
-                }
-                if (uris.isEmpty()) {
-                    try {
-                        val clipData = currentIntent?.clipData
-                        if (clipData != null && clipData.itemCount > 0) {
-                            clipData.getItemAt(0)?.uri?.let { uri ->
-                                uris.add(uri.toString())
-                            }
-                        }
-                    } catch (e: Exception) {}
-                }
-                initialUris = uris
-              } else if (currentIntent?.action == android.content.Intent.ACTION_SEND) {
                 try {
                     (currentIntent?.getParcelableExtra<android.os.Parcelable>(android.content.Intent.EXTRA_STREAM) as? android.net.Uri)?.let { uri ->
-                      initialUris = listOf(uri.toString())
+                      uriSet.add(uri.toString())
                     }
                 } catch (e: Exception) {}
-              } else if (currentIntent?.action == android.content.Intent.ACTION_SEND_MULTIPLE) {
+                try {
+                    val clipData = currentIntent?.clipData
+                    if (clipData != null && clipData.itemCount > 0) {
+                        for (i in 0 until clipData.itemCount) {
+                            clipData.getItemAt(i)?.uri?.let { uri ->
+                                uriSet.add(uri.toString())
+                            }
+                        }
+                    }
+                } catch (e: Exception) {}
                 try {
                     val arrayList = currentIntent?.getParcelableArrayListExtra<android.os.Parcelable>(android.content.Intent.EXTRA_STREAM)
                     if (arrayList != null) {
-                        val uris = mutableListOf<String>()
                         for (parcel in arrayList) {
-                            (parcel as? android.net.Uri)?.let { uris.add(it.toString()) }
+                            (parcel as? android.net.Uri)?.let { uriSet.add(it.toString()) }
                         }
-                        initialUris = uris
                     }
                 } catch (e: Exception) {}
+                initialUris = uriSet.toList()
               }
               
               val forceAction = currentIntent?.component?.className?.let { className ->

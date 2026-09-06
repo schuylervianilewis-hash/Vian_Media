@@ -100,31 +100,40 @@ fun PlaylistDetailScreen(
                     }
                 },
                 actions = {
-                    if (!isMultiSelectMode && playlist?.name == "Temp Current") {
+                    if (!isMultiSelectMode && (playlist?.isTemporary == true || playlist?.name == "Temp Current" || playlist?.name == "Quick Play (Temporary)")) {
                         var showSaveDialog by remember { mutableStateOf(false) }
                         TextButton(onClick = { showSaveDialog = true }) {
-                            Text("Save As")
+                            Text("Save / Keep")
                         }
                         
                         if (showSaveDialog) {
-                            var newName by remember { mutableStateOf("") }
+                            var newName by remember { mutableStateOf(if (playlist?.name?.contains("Temp") == true) "My Playlist" else (playlist?.name ?: "")) }
                             AlertDialog(
                                 onDismissRequest = { showSaveDialog = false },
-                                title = { Text("Save Playlist As") },
+                                title = { Text("Keep Playlist") },
                                 text = {
-                                    OutlinedTextField(
-                                        value = newName,
-                                        onValueChange = { newName = it },
-                                        label = { Text("Playlist Name") },
-                                        singleLine = true
-                                    )
+                                    Column {
+                                        Text(
+                                            "Save this playlist permanently so it won't be automatically cleared tomorrow.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        OutlinedTextField(
+                                            value = newName,
+                                            onValueChange = { newName = it },
+                                            label = { Text("Playlist Name") },
+                                            singleLine = true
+                                        )
+                                    }
                                 },
                                 confirmButton = {
                                     TextButton(
                                         onClick = {
-                                            if (newName.isNotBlank() && newName != "Temp Current") {
+                                            val trimmed = newName.trim()
+                                            if (trimmed.isNotBlank() && trimmed != "Temp Current" && trimmed != "Quick Play (Temporary)") {
                                                 coroutineScope.launch {
-                                                    repository.updatePlaylists(listOf(playlist!!.copy(name = newName)))
+                                                    repository.makePlaylistPermanent(playlist!!.id, trimmed)
                                                 }
                                                 showSaveDialog = false
                                             }

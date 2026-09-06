@@ -50,4 +50,16 @@ interface PlaylistDao {
 
     @Update
     suspend fun updatePlaylists(playlists: List<Playlist>)
+
+    @Query("SELECT * FROM playlists WHERE isTemporary = 1 LIMIT 1")
+    suspend fun getTemporaryPlaylist(): Playlist?
+
+    @Query("DELETE FROM playlists WHERE isTemporary = 1 AND timestamp < :thresholdTimestamp")
+    suspend fun deleteExpiredTemporaryPlaylists(thresholdTimestamp: Long): Int
+
+    @Query("UPDATE playlists SET isTemporary = 0, name = :newName WHERE id = :id")
+    suspend fun makePlaylistPermanent(id: Int, newName: String)
+
+    @Query("DELETE FROM playlist_items WHERE playlistId = :playlistId")
+    suspend fun clearItemsForPlaylist(playlistId: Int)
 }

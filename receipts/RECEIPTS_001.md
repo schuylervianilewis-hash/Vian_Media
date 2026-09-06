@@ -14,11 +14,11 @@ Verification: local build only (compile_applet passed)
 Deviation: None
 Follow-up: Push to GitHub repository to trigger the automated CI APK build.
 
-2026-09-01T10:44:00Z
-Requested: Implement fix for Gradle 9.3.1 wrapper download and SDK 36 preview compilation in CI APK pipeline
-Files touched: gradle/wrapper/gradle-wrapper.properties, app/build.gradle.kts, .github/workflows/build.yml, .gitignore, BLUEPRINT.md, receipts/RECEIPTS_001.md
-Action: Created gradle/wrapper/gradle-wrapper.properties locked to distributionUrl gradle-8.11.1-bin.zip to prevent remote repo wrapper override to Gradle 9.3.1. Stabilized app/build.gradle.kts compileSdk and targetSdk from release(36) preview to stable API 35. Updated .github/workflows/build.yml to ensure gradlew execution permissions and robust binary fallback. Added *.jks and *.p12 to .gitignore for credential security immunity.
-Verification: local build only (compile_applet passed)
+2026-09-06T11:40:00Z
+Requested: Implement Android share multi-select, dynamic queue appending, and temp playlist auto-save with next-day passive cleanup
+Files touched: app/src/main/java/com/example/MainActivity.kt, app/src/main/java/com/example/ui/screens/PlayerScreen.kt, app/src/main/java/com/example/ui/screens/PlaylistsScreen.kt, app/src/main/java/com/example/ui/screens/PlaylistDetailScreen.kt, receipts/RECEIPTS_001.md
+Action: Updated MainActivity.kt to merge all incoming URIs from intent.data, EXTRA_STREAM, clipData, and EXTRA_STREAM array list into an ordered LinkedHashSet. Implemented dynamic queue appending when ExoPlayer is already active (via player.addMediaItems). Added auto-saving of the active queue to "Quick Play (Temporary)" in Room. Propagated FLAG_GRANT_READ_URI_PERMISSION to PlaybackService foreground intents. Added passive on-launch janitor in MainActivity.onCreate to purge temporary playlists older than 24 hours. Integrated Save/Keep action in PlaylistDetailScreen and 24h expiration badge in PlaylistsScreen.
+Verification: local build only
 Deviation: None
-Follow-up: Push to GitHub repository to trigger automated APK generation.
+Follow-up: Test on Android device by sharing single and multiple mixed audio/video files via system share sheet to Mini Player.
 
