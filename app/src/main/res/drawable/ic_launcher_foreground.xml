@@ -1,44 +1,26 @@
-<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    
-    <!-- White rounded play triangle (from Next Player) -->
-    <group android:scaleX="0.4"
-        android:scaleY="0.4"
-        android:translateX="32.4"
-        android:translateY="32.4">
-        <path
-            android:fillColor="#FFFFFF"
-            android:pathData="M36.7 92.81c-1.3 0-2.57-0.34-3.7-0.98-2.53-1.44-4.1-4.22-4.1-7.24V23.4c0-3.03 1.57-5.8 4.1-7.24 1.15-0.66 2.46-1 3.79-0.98 1.33 0.01 2.62 0.39 3.76 1.08l52.28 31.3c1.09 0.68 1.99 1.62 2.61 2.75 0.62 1.12 0.95 2.39 0.95 3.68 0 1.28-0.33 2.55-0.95 3.67-0.62 1.13-1.52 2.08-2.61 2.76l-52.29 31.3c-1.16 0.7-2.49 1.08-3.85 1.08Z"/>
-    </group>
-    
-    <!-- 's' thin -->
+    <!-- Centered Note Card Sheet (Safe Zone 66dp: x:24..84, y:24..84) -->
     <path
-        android:strokeColor="#2196F3"
-        android:strokeWidth="1.2"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        android:fillColor="#00000000"
-        android:pathData="M 49.2, 52.5 C 47.5, 52.5 47.5, 54 48.5, 54 C 49.5, 54 49.5, 55.5 47.8, 55.5" />
-
-    <!-- 'V' thick -->
+        android:fillColor="#FFFFFF"
+        android:pathData="M32,24h36c4.4,0 8,3.6 8,8v44c0,4.4 -3.6,8 -8,8H32c-4.4,0 -8,-3.6 -8,-8V32c0,-4.4 3.6,-8 8,-8z" />
+    <!-- Left Accent Color Stripe -->
     <path
-        android:strokeColor="#2196F3"
-        android:strokeWidth="3.0"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        android:fillColor="#00000000"
-        android:pathData="M 50.5, 49.5 L 54.5, 58.5 L 58.5, 49.5" />
-
-    <!-- 'l' thin -->
+        android:fillColor="#E65100"
+        android:pathData="M32,24h6v60h-6c-4.4,0 -8,-3.6 -8,-8V32c0,-4.4 3.6,-8 8,-8z" />
+    <!-- Notebook Ruled Lines -->
     <path
-        android:strokeColor="#2196F3"
-        android:strokeWidth="1.2"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        android:fillColor="#00000000"
-        android:pathData="M 59.8, 50 L 59.8, 57" />
+        android:fillColor="#FFE0B2"
+        android:pathData="M44,36h28v3h-28zM44,45h28v3h-28zM44,54h28v3h-28z" />
+    <!-- Microphone Icon Circle Badge -->
+    <path
+        android:fillColor="#1565C0"
+        android:pathData="M60,56h18c3.3,0 6,2.7 6,6v12c0,3.3 -2.7,6 -6,6H60c-3.3,0 -6,-2.7 -6,-6V62c0,-3.3 2.7,-6 6,-6z" />
+    <!-- Mic Silhouette in White -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M69,60c-1.7,0 -3,1.3 -3,3v5c0,1.7 1.3,3 3,3s3,-1.3 3,-3v-5c0,-1.7 -1.3,-3 -3,-3zM74,68c0,2.8 -2.2,5 -5,5s-5,-2.2 -5,-5h-1.5c0,3.3 2.4,6 5.5,6.5V77h2v-2.5c3.1,-0.5 5.5,-3.2 5.5,-6.5H74z" />
 </vector>
